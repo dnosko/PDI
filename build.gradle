@@ -1,0 +1,125 @@
+// see https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/configuration/overview/#gradle-build-script
+
+plugins {
+    // Apply the java plugin to add support for Java
+    id 'java'
+    // Apply the application plugin to add support for building an application
+    id 'application'
+    // Apply the Maven publish plugin to publish resulting artefacts into a Maven repository
+    id 'maven-publish'
+    // Apply the shadow plugin to produce fat JARs
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'vehicles'
+version = '0.1-SNAPSHOT'
+mainClassName = 'vehicles.Main'
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+// https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/advanced/logging/#configuring-log4j-2
+// https://github.com/apache/flink/raw/master/flink-dist/src/main/flink-bin/conf/log4j-console.properties with removed appender.rolling to disable log.file
+applicationDefaultJvmArgs = ["-Dlog4j.configurationFile=log4j-console.properties"]
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.java-websocket:Java-WebSocket:1.5.4"
+    implementation 'org.asynchttpclient:async-http-client:2.12.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
+    compileOnly 'org.projectlombok:lombok:1.18.22'
+    annotationProcessor 'org.projectlombok:lombok:1.18.22'
+    implementation 'javax.xml.bind:jaxb-api:2.3.1'
+    implementation 'ch.qos.logback:logback-classic:1.2.9'
+    // Compile-time dependencies that should NOT be part of the shadow (uber) jar and are provided in the lib folder of Flink
+    implementation "org.apache.flink:flink-clients:1.18.0"
+    implementation "org.apache.flink:flink-streaming-java:1.18.0"
+    implementation "org.apache.flink:flink-connector-files:1.18.0"
+    // Dependencies that should be part of the shadow jar, e.g. connectors. These must be in the flinkShadowJar configuration!
+    runtimeOnly "org.apache.logging.log4j:log4j-slf4j-impl:2.21.1"
+    runtimeOnly "org.apache.logging.log4j:log4j-api:2.21.1"
+    runtimeOnly "org.apache.logging.log4j:log4j-core:2.21.1"
+    // Add test dependencies here.
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
+}
+
+configurations {
+    flinkShadowJar // dependencies which go into the shadowJar
+    // always exclude these (also from transitive dependencies) since they are provided by Flink
+    flinkShadowJar.exclude group: 'org.apache.flink', module: 'force-shading'
+    flinkShadowJar.exclude group: 'com.google.code.findbugs', module: 'jsr305'
+    flinkShadowJar.exclude group: 'org.slf4j'
+    flinkShadowJar.exclude group: 'org.apache.logging.log4j'
+}
+
+sourceSets {
+    // make compileOnly dependencies available for tests
+    main.compileClasspath += configurations.flinkShadowJar
+    main.runtimeClasspath += configurations.flinkShadowJar
+    test.compileClasspath += configurations.flinkShadowJar
+    test.runtimeClasspath += configurations.flinkShadowJar
+    javadoc.classpath += configurations.flinkShadowJar
+}
+
+compileJava {
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+run {
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+// https://imperceptiblethoughts.com/shadow/configuration/reproducible-builds/
+tasks.withType(AbstractArchiveTask) {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+jar {
+    manifest {
+        attributes 'Built-By': System.getProperty('user.name'), 'Build-Jdk': System.getProperty('java.version'), 'Main-Class': mainClassName
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.flinkShadowJar]
+}
+
+task fatJar(type: Jar) {
+    manifest.from jar.manifest
+    archiveClassifier = 'fat'
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE // allow duplicates
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    } {
+        exclude "META-INF/*.SF"
+        exclude "META-INF/*.DSA"
+        exclude "META-INF/*.RSA"
+    }
+    zip64 true
+    with jar
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = 'build-repository'
+            url = "file://${buildDir}/mvn-repo"
+        }
+    }
+}
