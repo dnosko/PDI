@@ -5,13 +5,18 @@ import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.configuration.MemorySize;
+import org.apache.flink.connector.file.sink.FileSink;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
@@ -24,6 +29,7 @@ import javax.xml.bind.DatatypeConverter;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -36,26 +42,38 @@ public class Main {
         //final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
         env.setRuntimeMode(RuntimeExecutionMode.AUTOMATIC);
-        final ObjectMapper objectMapper = new ObjectMapper();
         // toto je pre lokalne spustenie a debugovanie.
         //final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
         // todo pridat if ci test ak test tak to ide zo suboru alebo z iteratoru from Collection
         //  inak z websocketu?2
 
         ParameterTool parameters = ParameterTool.fromArgs(args);
-
         env.getConfig().setGlobalJobParameters(parameters);
+
         DataStreamSource<String> mySocketStream = env.addSource(new MyWebSocketSourceFunc());
-        /*DataStream<Vehicle> vehicleStream = mySocketStream
-                .map(jsonString -> mapJsonToVehicle(jsonString));*/
         DataStream<JsonNode> vehicleStream = mySocketStream.map(jsonString -> mapToJson(jsonString)).filter(new IsActiveFilter());
-
-        vehicleStream.print();
-        //mySocketStream.print();
-
-
         env.enableCheckpointing(CHECKPOINTING_INTERVAL_MS);
         env.setRestartStrategy(RestartStrategies.noRestart());
+
+
+        /* Vehicles going North */ //TODO potom urobit na to nejaku mozno factory? alebo nieco nech to je pekne podla prepinacov...
+        // TODO upravit JSON format na nejaky krajsi po riadkoch?
+        DataStream<JsonNode> northStream = vehicleStream.filter(new goingNorth());
+        northStream.print();
+        final Path outputNorth = new Path("tmp/north");
+        final DefaultRollingPolicy<JsonNode, String> rollingPolicy = DefaultRollingPolicy
+                .builder()
+                .withMaxPartSize(MemorySize.ofMebiBytes(1))
+                .withRolloverInterval(Duration.ofSeconds(10))
+                .build();
+        final FileSink<JsonNode> northSink = FileSink
+                .<JsonNode>forRowFormat(outputNorth, new SimpleStringEncoder<>())
+                .withRollingPolicy(rollingPolicy)
+                .build();
+
+        northStream.sinkTo(northSink).name("north-sink");
+
+
         env.execute(JOB_NAME);
 
     }
@@ -77,24 +95,19 @@ public class Main {
         }
     }
 
-    /*private static Vehicle mapJsonToVehicle(String jsonString) {
-        try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode jsonNode = objectMapper.readTree(jsonString);
-
-            JsonNode geometryNode = jsonNode.path("geometry");
-            Geometry geometry = objectMapper.readValue(geometryNode.toString(), Geometry.class);
-
-            JsonNode attributesNode = jsonNode.path("attributes");
-            Attributes attributes = objectMapper.readValue(attributesNode.toString(), Attributes.class);
-
-            return new Vehicle(geometry, attributes);
-        } catch (Exception e) {
-            // Handle the exception according to your needs
-            e.printStackTrace();
-            return null;
+    /* Filter vehicles going to the North. Angle is specified by bearing attribute and 0 degrees is North.
+       Deviation can be 45 degrees. Therefor 0-45 or 315-360 degrees */
+    private static class goingNorth implements FilterFunction<JsonNode> {
+        @Override
+        public boolean filter(JsonNode jsonNode) throws Exception {
+            double bearing = jsonNode.path("attributes").path("bearing").asDouble();
+            double lowerBound = 0;
+            double upperBound = 45;
+            double upperBound2 = 315;
+            return (bearing >= lowerBound && bearing <= upperBound) || bearing >= upperBound2;
         }
-    }*/
+        }
+
 
     // from https://gist.github.com/tonvanbart/17dc93be413f7c53b76567e10b87a141
     public static class MyWebSocketSourceFunc extends RichSourceFunction<String> {
