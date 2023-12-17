@@ -36,6 +36,7 @@ dependencies {
     implementation 'javax.xml.bind:jaxb-api:2.3.1'
     implementation 'ch.qos.logback:logback-classic:1.2.9'
     // Compile-time dependencies that should NOT be part of the shadow (uber) jar and are provided in the lib folder of Flink
+    implementation 'org.apache.flink:flink-json:1.18.0'
     implementation "org.apache.flink:flink-clients:1.18.0"
     implementation "org.apache.flink:flink-streaming-java:1.18.0"
     implementation "org.apache.flink:flink-connector-files:1.18.0"

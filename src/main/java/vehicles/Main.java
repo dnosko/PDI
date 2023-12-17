@@ -1,8 +1,12 @@
 package vehicles;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.api.common.RuntimeExecutionMode;
+import org.apache.flink.api.common.functions.FilterFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,14 +46,55 @@ public class Main {
 
         env.getConfig().setGlobalJobParameters(parameters);
         DataStreamSource<String> mySocketStream = env.addSource(new MyWebSocketSourceFunc());
-        mySocketStream.map(new MapIt()).print();
-        mySocketStream.print();
+        /*DataStream<Vehicle> vehicleStream = mySocketStream
+                .map(jsonString -> mapJsonToVehicle(jsonString));*/
+        DataStream<JsonNode> vehicleStream = mySocketStream.map(jsonString -> mapToJson(jsonString)).filter(new IsActiveFilter());
+
+        vehicleStream.print();
+        //mySocketStream.print();
+
 
         env.enableCheckpointing(CHECKPOINTING_INTERVAL_MS);
         env.setRestartStrategy(RestartStrategies.noRestart());
         env.execute(JOB_NAME);
 
     }
+    private static JsonNode mapToJson(String jsonString) {
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.readTree(jsonString);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /*Filter only active vehicles*/
+    private static class IsActiveFilter implements FilterFunction<JsonNode> {
+        @Override
+        public boolean filter(JsonNode jsonNode) throws Exception {
+            return jsonNode.path("attributes").path("isinactive").asText().equals("false");
+        }
+    }
+
+    /*private static Vehicle mapJsonToVehicle(String jsonString) {
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode jsonNode = objectMapper.readTree(jsonString);
+
+            JsonNode geometryNode = jsonNode.path("geometry");
+            Geometry geometry = objectMapper.readValue(geometryNode.toString(), Geometry.class);
+
+            JsonNode attributesNode = jsonNode.path("attributes");
+            Attributes attributes = objectMapper.readValue(attributesNode.toString(), Attributes.class);
+
+            return new Vehicle(geometry, attributes);
+        } catch (Exception e) {
+            // Handle the exception according to your needs
+            e.printStackTrace();
+            return null;
+        }
+    }*/
 
     // from https://gist.github.com/tonvanbart/17dc93be413f7c53b76567e10b87a141
     public static class MyWebSocketSourceFunc extends RichSourceFunction<String> {

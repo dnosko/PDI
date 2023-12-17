@@ -1,20 +1,85 @@
 package vehicles;
 
-//{"geometry":{"x":16.436563,"y":49.276173,"spatialReference":{"wkid":4326}},"attributes":{"id":"2675","vtype":2,"ltype":4,"lat":49.276173,"lng":16.436563,"bearing":-1.0,"lineid":303,"linename":"303","routeid":4026,"course":"30302","lf":"true","delay":0.0,"laststopid":13265,"finalstopid":1796,"isinactive":"true","lastupdate":1702749752537,"globalid":"{D38E5D2D-304F-5275-0BE6-CBB737512E9E}"}};
-//
+
+import java.util.Date;
 
 public class Vehicle {
-    double x;
-    /*private Geometry geometry;
-    private Attributes attributes;
+
+    public Geometry geometry;
+    public Attributes attributes;
 
     public Vehicle(Geometry geometry, Attributes attributes) {
         this.geometry = geometry;
         this.attributes = attributes;
     }
 
-    class Attributes{
+    public String toString() {
+        return "Vehicle{" +
+                "geometry=" + geometry +
+                ", attributes=" + attributes +
+                '}';
+    }
 
+    class Attributes{
+        String id;
+        short vtype;
+        short ltype;
+        double lat;
+        double lng;
+        double bearing;
+        long lineid;
+        String linename;
+        long routeid;
+        String course;
+        String lf;
+        double delay;
+        long laststopid;
+        long finalstopid;
+        String isinactive;
+        Date lastupdate;
+
+        public Attributes(String id, short vtype, short ltype, double lat, double lng, double bearing, long lineid,
+                          String linename, long routeid, String course, String lf, double delay, long laststopid,
+                          long finalstopid, String isinactive, Date lastupdate){
+            this.id = id;
+            this.vtype = vtype;
+            this.ltype = ltype;
+            this.lat = lat;
+            this.lng = lng;
+            this.bearing = bearing;
+            this.lineid = lineid;
+            this.linename = linename;
+            this.routeid = routeid;
+            this.course = course;
+            this.lf = lf;
+            this.delay = delay;
+            this.laststopid = laststopid;
+            this.finalstopid = finalstopid;
+            this.isinactive = isinactive;
+            this.lastupdate = lastupdate;
+        }
+
+        @Override
+        public String toString() {
+            return "Attributes{" +
+                    "id='" + this.id + '\'' +
+                    ", vtype=" + this.vtype +
+                    ", ltype=" + this.ltype +
+                    ", lat=" + this.lat +
+                    ", lng=" + this.lng +
+                    ", bearing=" + this.bearing +
+                    ", lineid=" + this.lineid +
+                    ", linename='" + this.linename + '\'' +
+                    ", routeid=" + this.routeid +
+                    ", course='" + this.course + '\'' +
+                    ", lf='" + this.lf + '\'' +
+                    ", delay=" + this.delay +
+                    ", laststopid=" + this.laststopid +
+                    ", finalstopid=" + this.finalstopid +
+                    ", isinactive='" + this.isinactive + '\'' +
+                    ", lastupdate=" + this.lastupdate +
+                    '}';
+        }
     }
 
     class Geometry {
@@ -26,6 +91,14 @@ public class Vehicle {
             this.y = y;
             this.sr = sr;
         }
+        @Override
+        public String toString() {
+            return "Geometry{" +
+                    "x=" + this.x +
+                    ", y=" + this.y +
+                    ", sr=" + this.sr +
+                    '}';
+        }
 
         class SpatialReference{
             int wkid;
@@ -33,6 +106,12 @@ public class Vehicle {
             public SpatialReference(int wkid){
                 this.wkid = wkid;
             }
+            @Override
+            public String toString() {
+                return "SpatialReference{" +
+                        "wkid=" + this.wkid +
+                        '}';
+            }
         }
-    }*/
+    }
     }
