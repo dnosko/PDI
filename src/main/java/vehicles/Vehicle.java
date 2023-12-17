@@ -1,67 +1,52 @@
 package vehicles;
 
 
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.text.SimpleDateFormat;
 import java.util.Date;
 
+
 public class Vehicle {
+    String id;
+    short vtype;
+    short ltype;
+    double lat;
+    double lng;
+    double bearing;
+    long lineid;
+    String linename;
+    long routeid;
+    String course;
+    String lf;
+    double delay;
+    long laststopid;
+    long finalstopid;
+    String isinactive;
+    Date lastupdate;
 
-    public Geometry geometry;
-    public Attributes attributes;
-
-    public Vehicle(Geometry geometry, Attributes attributes) {
-        this.geometry = geometry;
-        this.attributes = attributes;
-    }
-
-    public String toString() {
-        return "Vehicle{" +
-                "geometry=" + geometry +
-                ", attributes=" + attributes +
-                '}';
-    }
-
-    class Attributes{
-        String id;
-        short vtype;
-        short ltype;
-        double lat;
-        double lng;
-        double bearing;
-        long lineid;
-        String linename;
-        long routeid;
-        String course;
-        String lf;
-        double delay;
-        long laststopid;
-        long finalstopid;
-        String isinactive;
-        Date lastupdate;
-
-        public Attributes(String id, short vtype, short ltype, double lat, double lng, double bearing, long lineid,
-                          String linename, long routeid, String course, String lf, double delay, long laststopid,
-                          long finalstopid, String isinactive, Date lastupdate){
-            this.id = id;
-            this.vtype = vtype;
-            this.ltype = ltype;
-            this.lat = lat;
-            this.lng = lng;
-            this.bearing = bearing;
-            this.lineid = lineid;
-            this.linename = linename;
-            this.routeid = routeid;
-            this.course = course;
-            this.lf = lf;
-            this.delay = delay;
-            this.laststopid = laststopid;
-            this.finalstopid = finalstopid;
-            this.isinactive = isinactive;
-            this.lastupdate = lastupdate;
+        public Vehicle(JsonNode attributes){
+            this.id = attributes.path("id").asText();
+            this.vtype = (short) attributes.path("vtype").asInt();
+            this.ltype = (short) attributes.path("ltype").asInt();
+            this.lat =  attributes.path("lat").asDouble();
+            this.lng = attributes.path("lng").asDouble();
+            this.bearing = attributes.path("bearing").asDouble();
+            this.lineid = attributes.path("lineid").asInt();
+            this.linename = attributes.path("linename").asText();
+            this.routeid = attributes.path("routeid").asInt();
+            this.course = attributes.path("course").asText();
+            this.lf = attributes.path("lf").asText();
+            this.delay = attributes.path("delay").asInt();
+            this.laststopid = attributes.path("laststopid").asInt();
+            this.finalstopid = attributes.path("finalstopid").asInt();
+            this.isinactive = attributes.path("isinactive").asText();
+            this.lastupdate = new Date(attributes.path("lastupdate").asLong());
         }
 
         @Override
         public String toString() {
-            return "Attributes{" +
+            return "Vehicle{" +
                     "id='" + this.id + '\'' +
                     ", vtype=" + this.vtype +
                     ", ltype=" + this.ltype +
@@ -77,41 +62,11 @@ public class Vehicle {
                     ", laststopid=" + this.laststopid +
                     ", finalstopid=" + this.finalstopid +
                     ", isinactive='" + this.isinactive + '\'' +
-                    ", lastupdate=" + this.lastupdate +
-                    '}';
-        }
-    }
-
-    class Geometry {
-        double x;
-        double y;
-        SpatialReference sr;
-        public Geometry(double x, double y, SpatialReference sr){
-            this.x = x;
-            this.y = y;
-            this.sr = sr;
-        }
-        @Override
-        public String toString() {
-            return "Geometry{" +
-                    "x=" + this.x +
-                    ", y=" + this.y +
-                    ", sr=" + this.sr +
+                    ", lastupdate=" + this.lastupdate + '\''+
                     '}';
         }
 
-        class SpatialReference{
-            int wkid;
 
-            public SpatialReference(int wkid){
-                this.wkid = wkid;
-            }
-            @Override
-            public String toString() {
-                return "SpatialReference{" +
-                        "wkid=" + this.wkid +
-                        '}';
-            }
-        }
-    }
-    }
+}
+
+

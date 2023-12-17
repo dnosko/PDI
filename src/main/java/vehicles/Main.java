@@ -6,6 +6,8 @@ import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
+import org.apache.flink.api.java.tuple.Tuple;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.connector.file.sink.FileSink;
@@ -30,7 +32,9 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.Date;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -51,27 +55,45 @@ public class Main {
         env.getConfig().setGlobalJobParameters(parameters);
 
         DataStreamSource<String> mySocketStream = env.addSource(new MyWebSocketSourceFunc());
-        DataStream<JsonNode> vehicleStream = mySocketStream.map(jsonString -> mapToJson(jsonString)).filter(new IsActiveFilter());
+        DataStream<JsonNode> jsonStream = mySocketStream.map(jsonString -> mapToJson(jsonString));
+        DataStream<Vehicle> vehicleStream = jsonStream.map(s -> mapToVehicle(s)).filter(new IsActiveFilter());
         env.enableCheckpointing(CHECKPOINTING_INTERVAL_MS);
         env.setRestartStrategy(RestartStrategies.noRestart());
+        //vehicleStream.print();
 
 
         /* Vehicles going North */ //TODO potom urobit na to nejaku mozno factory? alebo nieco nech to je pekne podla prepinacov...
         // TODO upravit JSON format na nejaky krajsi po riadkoch?
-        DataStream<JsonNode> northStream = vehicleStream.filter(new goingNorth());
-        northStream.print();
+       DataStream<Vehicle> northStream = vehicleStream.filter(new goingNorth());
+        //northStream.print();
         final Path outputNorth = new Path("tmp/north");
-        final DefaultRollingPolicy<JsonNode, String> rollingPolicy = DefaultRollingPolicy
+        final DefaultRollingPolicy<Vehicle, String> rollingPolicy = DefaultRollingPolicy
                 .builder()
                 .withMaxPartSize(MemorySize.ofMebiBytes(1))
                 .withRolloverInterval(Duration.ofSeconds(10))
                 .build();
-        final FileSink<JsonNode> northSink = FileSink
-                .<JsonNode>forRowFormat(outputNorth, new SimpleStringEncoder<>())
+        final FileSink<Vehicle> northSink = FileSink
+                .<Vehicle>forRowFormat(outputNorth, new SimpleStringEncoder<>())
                 .withRollingPolicy(rollingPolicy)
                 .build();
 
         northStream.sinkTo(northSink).name("north-sink");
+
+        /* Trains with last stops */
+
+        DataStream<Vehicle> trainsStream = vehicleStream.filter(new FilterFunction<Vehicle>() {
+            @Override
+            public boolean filter(Vehicle v) throws Exception {
+                return v.ltype == 5;
+            }
+        });
+
+        trainsStream.map(new MapFunction<Vehicle, String>() {
+                @Override
+                public String map(Vehicle v) throws Exception {
+                    return "trainID:"+ v.id + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
+                }
+        }).print();
 
 
         env.execute(JOB_NAME);
@@ -87,24 +109,33 @@ public class Main {
         }
     }
 
+    private static Vehicle mapToVehicle(JsonNode jsonString) {
+        try {
+            return new Vehicle(jsonString.path("attributes"));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     /*Filter only active vehicles*/
-    private static class IsActiveFilter implements FilterFunction<JsonNode> {
+    private static class IsActiveFilter implements FilterFunction<Vehicle> {
         @Override
-        public boolean filter(JsonNode jsonNode) throws Exception {
-            return jsonNode.path("attributes").path("isinactive").asText().equals("false");
+        public boolean filter(Vehicle v) throws Exception {
+            String inactive = v.isinactive;
+            return inactive.equals("false");
         }
     }
 
     /* Filter vehicles going to the North. Angle is specified by bearing attribute and 0 degrees is North.
        Deviation can be 45 degrees. Therefor 0-45 or 315-360 degrees */
-    private static class goingNorth implements FilterFunction<JsonNode> {
+    private static class goingNorth implements FilterFunction<Vehicle> {
         @Override
-        public boolean filter(JsonNode jsonNode) throws Exception {
-            double bearing = jsonNode.path("attributes").path("bearing").asDouble();
+        public boolean filter(Vehicle v) throws Exception {
             double lowerBound = 0;
             double upperBound = 45;
             double upperBound2 = 315;
-            return (bearing >= lowerBound && bearing <= upperBound) || bearing >= upperBound2;
+            return (v.bearing >= lowerBound && v.bearing <= upperBound) || v.bearing >= upperBound2;
         }
         }
 
