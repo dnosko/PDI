@@ -9,6 +9,7 @@ import java.util.Date;
 
 
 public class Vehicle {
+    @Getter
     String id;
     short vtype;
     short ltype;

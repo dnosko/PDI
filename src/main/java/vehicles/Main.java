@@ -1,42 +1,36 @@
 package vehicles;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import lombok.Data;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.*;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
-import org.apache.flink.api.java.functions.KeySelector;
-import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
-import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 
 import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFunction;
-import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
-import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 
-import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
@@ -54,6 +48,14 @@ import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
+/**
+ * TODO:
+ * pridat prepinace
+ * urobit do funkcii jednotlive tasky
+ * urobit triedy pre tie specialne funkcie a nemat to tu pokope v jednom
+ * prehodit websocket do vlasnej triedy
+ * urobit testy
+ * **/
 @Slf4j
 public class Main {
     public static final int CHECKPOINTING_INTERVAL_MS = 5000;
@@ -129,31 +131,34 @@ public class Main {
         printStream.sinkTo(lastStopSink).name("laststop-sink");
         /**************************************************************************************/
         //env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
-        //TODO GLOBALNE meskanie vypisovat seznam nejvýše 5 zpožděných vozů seřazených sestupně podle jejich posledně hlášeného zpoždění od startu aplikace
 
-        /*DataStream<Vehicle> delayedVehicles =
-                vehicleStream.filter(v -> v.delay > 0.0)
-                .keyBy(v -> v.vtype)
-                .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
-                        .process(new WindowFunction()).map(new MapFunction<Vehicle, String>() {
+        /* top 5 delayed vehicles of all time, sorting doesnt work, skontrolovat ci sa nepridavaju tie iste dokola... */
+        DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
+                .<Vehicle>forMonotonousTimestamps()
+                .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()));
+
+        delayedStream.windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
+                .process(new MostDelayedProcessAllWindowFunction())
+            .map(new MapFunction<Vehicle, String>() {
             @Override
             public String map(Vehicle v) throws Exception {
                 return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
             }
-        }).print().setParallelism(1);*/
+        }).print().setParallelism(1);
 
         //delayedVehicles.print();
 
-        /* Top 5 delayed in 3 minutes window TODO nefunguje radenie a ma to byt bez allWindows iba windows :)))))) mozno pridat tie watermarks */
-        DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
+        /* Top 5 delayed in 3 minutes window
+        TODO nefunguje radenie a ma to byt allWindows lebo nechcem grupovat cez kluce a  skusit urobit cez aggregate ako average??? */
+        /*DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
                 .<Vehicle>forMonotonousTimestamps()
                 .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
-                .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(30)))
-                .apply(new WindowDelayed())
+                .flatMap(new AllTimeDelayed()).windowAll(TumblingProcessingTimeWindows.of(Time.seconds(30)))
                 .map((MapFunction<Vehicle, String>) v -> "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate)
                 .print()
-                .setParallelism(1);
+                .setParallelism(1);*/
         /*************************************/
+
         /* Average for 3 minutes across all vehicles */
         DataStream<Tuple2<String, Double>> keyDelayStream = vehicleStream
                 .assignTimestampsAndWatermarks(WatermarkStrategy
@@ -161,42 +166,70 @@ public class Main {
                         .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
                 .map(v -> new Tuple2<>(v.id, v.getDelay()))
                 .returns(Types.TUPLE(Types.STRING, Types.DOUBLE));
-        keyDelayStream.windowAll(TumblingEventTimeWindows.of(Time.minutes(3))).aggregate(new AverageAggregate())
-                .print();
-
+        keyDelayStream.windowAll(TumblingEventTimeWindows.of(Time.minutes(3))).aggregate(new AverageAggregate());
+                //.print();
 
         env.execute(JOB_NAME);
 
     }
 
-    private static class AverageWindowFunction
-            extends ProcessWindowFunction<Double, Tuple2<String, Double>, String, TimeWindow> {
-
-        public void process(String key,
-                            Context context,
-                            Iterable<Double> averages,
-                            Collector<Tuple2<String, Double>> out) {
-            Double average = averages.iterator().next();
-            out.collect(new Tuple2<>(key, average));
-        }
-    }
-
-    public static class ProcessAggregationWindow implements WindowFunction<Tuple2<String, Double>, Double, String, TimeWindow> {
+    /* mozno zmenit na GLobalWindow ak nebude funvoat a fungovat na tom.*/
+    public static class MostDelayedProcessAllWindowFunction extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow> {
+        private transient ListState<Vehicle> mostDelayedVehicles;
+        private final int topN = 5;
 
         @Override
-        public void apply(String s, TimeWindow timeWindow, Iterable<Tuple2<String, Double>> values, Collector<Double> out) throws Exception {
-            double sum = 0.0;
-            int count = 0;
+        public void open(Configuration parameters) {
+            ListStateDescriptor<Vehicle> descriptor =
+                    new ListStateDescriptor<>("mostDelayedState", TypeInformation.of(Vehicle.class));
+            mostDelayedVehicles = getRuntimeContext().getListState(descriptor);
+        }
 
-            for (Tuple2<String, Double> value : values) {
-                sum += value.f1;
-                count ++;
+        @Override
+        public void process(Context context, Iterable<Vehicle> elements, Collector<Vehicle> out) throws Exception {
+            // add vehicles to new list for sorting
+            Iterable<Vehicle> current = mostDelayedVehicles.get();
+            List<Vehicle> currentList = new ArrayList<>();
+
+            for (Vehicle v : current) {
+                currentList.add(v);
             }
 
-            double avg = sum/count;
-            out.collect(avg);
+            // Update state with the new vehicles
+            for (Vehicle vehicle : elements) {
+                // test if vehicle with same id is already in list
+                Vehicle testIfAlreadyInList = vehicleAlreadyInList(mostDelayedVehicles.get(), vehicle);
+                if (testIfAlreadyInList != null) {
+                    // remove old vehicle instance so it can be replaced by the most recent record
+                    currentList.remove(testIfAlreadyInList);
+                }
+                // add new vehicle to list
+                currentList.add(vehicle);
+
+            }
+
+            currentList.sort(Comparator.comparing(Vehicle::getDelay).reversed());
+
+            mostDelayedVehicles.clear();
+            // keep only topN delayed vehicles
+            mostDelayedVehicles.addAll(currentList.subList(0, Math.min(topN, currentList.size())));
+
+            // Emit the two most delayed vehicles
+            for (Vehicle vehicle : mostDelayedVehicles.get()) {
+                out.collect(vehicle);
+            }
+        }
+
+        private Vehicle vehicleAlreadyInList(Iterable<Vehicle> elements, Vehicle v) {
+            for (Vehicle alredyIn : elements) {
+                if (v.getId().equals(alredyIn.getId())) {
+                    return alredyIn;
+                }
+            }
+            return null;
         }
     }
+
 
     public static class WindowDelayed extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow>  {
 
