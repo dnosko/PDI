@@ -21,6 +21,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
 import org.asynchttpclient.Dsl;
@@ -91,23 +93,21 @@ public class Main {
         });
 
 
-        KeyedStream<Vehicle, String> keyedStream = trainsStream.keyBy(value -> value.id);
-        DataStream<Vehicle> reducedStream = keyedStream.reduce(new ReduceFunction<Vehicle>() {
-                    @Override
-                    public Vehicle reduce(Vehicle v1, Vehicle v2)
-                            throws Exception {
-                        if (v1.lastupdate.compareTo(v2.lastupdate) < 0)
-                            return v2;
-                        else
-                            return v1;
-                    }
-                });
+        trainsStream.keyBy(value -> value.id).reduce(new ReduceFunction<Vehicle>() {
+            @Override
+            public Vehicle reduce(Vehicle v1, Vehicle v2)
+                    throws Exception {
+                if (v1.lastupdate.compareTo(v2.lastupdate) < 0)
+                    return v2;
+                else
+                    return v1;
+            }
+        });
 
-
-        SingleOutputStreamOperator<String> printStream = reducedStream.map(new MapFunction<Vehicle, String>() {
+        SingleOutputStreamOperator<String> printStream = trainsStream.map(new MapFunction<Vehicle, String>() {
                 @Override
                 public String map(Vehicle v) throws Exception {
-                    return "trainID:"+ v.id + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
+                    return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
                 }
         });//.print();
 
