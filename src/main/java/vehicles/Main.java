@@ -2,16 +2,16 @@ package vehicles;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.api.common.RuntimeExecutionMode;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.*;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
-import org.apache.flink.api.java.tuple.Tuple;
-import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.shaded.netty4.io.netty.util.internal.PriorityQueue;
+import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -20,8 +20,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
@@ -35,11 +37,11 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Date;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import org.apache.flink.streaming.api.windowing.windows.Window;
+
 
 @Slf4j
 public class Main {
@@ -126,9 +128,25 @@ public class Main {
 
         printStream.sinkTo(lastStopSink).name("laststop-sink");
         /**************************************************************************************/
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        /*DataStream<Vehicle> delayedVehicles = vehicleStream.filter(v -> v.delay > 0.0);
-        delayedVehicles
+        DataStream<Vehicle> delayedVehicles =  vehicleStream.assignTimestampsAndWatermarks(
+                WatermarkStrategy.<Vehicle>forMonotonousTimestamps()
+                        .withTimestampAssigner((event, timestamp) -> event.lastupdate.getTime())
+        ).filter(v -> v.delay > 0.0)
+        .windowAll(TumblingEventTimeWindows.of(Time.seconds(10)))
+                .apply(new WindowFunction()).keyBy(v -> v.id).reduce(new ReduceFunction<Vehicle>() {
+                    @Override
+                    public Vehicle reduce(Vehicle v1, Vehicle v2) {
+                        // Choose the vehicle with the higher delay
+                        return v1.delay >= v2.delay ? v1 : v2;
+                    }
+                });
+
+        delayedVehicles.print();
+
+        //delayedVehicles.map(Object::toString).print();
+        /*delayedVehicles
                 .keyBy(v -> v.id)
                 .windowAll(TumblingProcessingTimeWindows.of(Time.minutes(1)))
                 .reduce(new ReduceFunction<Vehicle>() {
@@ -144,6 +162,29 @@ public class Main {
 
         env.execute(JOB_NAME);
 
+    }
+
+    public static class WindowFunction implements AllWindowFunction<Vehicle, Vehicle, TimeWindow> {
+        @Override
+        public void apply(TimeWindow timeWindow, Iterable<Vehicle> v, Collector<Vehicle> out) throws Exception {
+            List<Vehicle> vehicles = new ArrayList<>();
+            System.out.println("i am here");
+            for (Vehicle vehicle : v) {
+                if (vehicle != null)
+                    vehicles.add(vehicle);
+            }
+            System.out.println("i am here 2");
+            // Sort the vehicles by delay
+            vehicles.sort(Comparator.comparingDouble(Vehicle::getDelay).reversed());
+
+            int topCount = Math.min(vehicles.size(), 5);
+            List<Vehicle> top5Vehicles = vehicles.subList(0, topCount);
+            System.out.println("i am here" + topCount + " " + top5Vehicles.size());
+            for (Vehicle ve: top5Vehicles)
+                out.collect(ve);
+
+
+        }
     }
 
 

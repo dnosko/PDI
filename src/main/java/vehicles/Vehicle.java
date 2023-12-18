@@ -2,6 +2,7 @@ package vehicles;
 
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.Getter;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -19,6 +20,7 @@ public class Vehicle {
     long routeid;
     String course;
     String lf;
+    @Getter
     double delay;
     long laststopid;
     long finalstopid;
@@ -44,7 +46,7 @@ public class Vehicle {
             this.lastupdate = new Date(attributes.path("lastupdate").asLong());
         }
 
-        @Override
+    @Override
         public String toString() {
             return "Vehicle{" +
                     "id='" + this.id + '\'' +
