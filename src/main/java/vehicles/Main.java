@@ -2,9 +2,7 @@ package vehicles;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.api.common.RuntimeExecutionMode;
-import org.apache.flink.api.common.functions.FilterFunction;
-import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.common.functions.ReduceFunction;
+import org.apache.flink.api.common.functions.*;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.java.tuple.Tuple;
@@ -13,15 +11,18 @@ import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.shaded.netty4.io.netty.util.internal.PriorityQueue;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.util.Collector;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
 import org.asynchttpclient.Dsl;
@@ -86,11 +87,11 @@ public class Main {
         DataStream<Vehicle> trainsStream = vehicleStream.filter(new FilterFunction<Vehicle>() {
             @Override
             public boolean filter(Vehicle v) throws Exception {
-                return v.ltype == 1;
+                return v.ltype == 5;
             }
         });
 
-        trainsStream.keyBy(value -> value.id).reduce(new ReduceFunction<Vehicle>() {
+        /*trainsStream.keyBy(value -> value.id).reduce(new ReduceFunction<Vehicle>() {
             @Override
             public Vehicle reduce(Vehicle v1, Vehicle v2)
                     throws Exception {
@@ -99,15 +100,17 @@ public class Main {
                 else
                     return v1;
             }
-        });
+        });*/
 
-        SingleOutputStreamOperator<String> printStream =
+        trainsStream.keyBy(value -> value.id).flatMap(new LastStops());
+
+       SingleOutputStreamOperator<String> printStream =
                 trainsStream.map(new MapFunction<Vehicle, String>() {
             @Override
             public String map(Vehicle v) throws Exception {
                 return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
             }
-        });//.print();
+        });//.print();*/
 
 
         final Path outputAllTrainsLastStop = new Path("tmp/lastStop");
@@ -121,18 +124,29 @@ public class Main {
                 .withRollingPolicy(rollingPolicyLastStop)
                 .build();
 
-
-
-        //PrintSinkFunction<Vehicle> refreshSink = new PrintSinkFunction<>("Refresh");
-
-        //reducedStream.addSink(refreshSink);
         printStream.sinkTo(lastStopSink).name("laststop-sink");
         /**************************************************************************************/
 
-        
+        /*DataStream<Vehicle> delayedVehicles = vehicleStream.filter(v -> v.delay > 0.0);
+        delayedVehicles
+                .keyBy(v -> v.id)
+                .windowAll(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+                .reduce(new ReduceFunction<Vehicle>() {
+                    @Override
+                    public Vehicle reduce(Vehicle v1, Vehicle v2) {
+                        // Choose the vehicle with the higher delay
+                        return v1.delay >= v2.delay ? v1 : v2;
+                    }
+                })
+                .flatMap(new TopNFlatMapFunction())
+                .print();
+    */
+
         env.execute(JOB_NAME);
 
     }
+
+
     private static JsonNode mapToJson(String jsonString) {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
