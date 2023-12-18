@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.java.tuple.Tuple;
@@ -12,12 +13,12 @@ import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.asynchttpclient.AsyncHttpClient;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 
 @Slf4j
 public class Main {
@@ -78,26 +80,63 @@ public class Main {
                 .build();
 
         northStream.sinkTo(northSink).name("north-sink");
-
+        /************************************************************************************/
         /* Trains with last stops */
 
         DataStream<Vehicle> trainsStream = vehicleStream.filter(new FilterFunction<Vehicle>() {
             @Override
             public boolean filter(Vehicle v) throws Exception {
-                return v.ltype == 5;
+                return v.ltype == 1;
             }
         });
 
-        trainsStream.map(new MapFunction<Vehicle, String>() {
+
+        KeyedStream<Vehicle, String> keyedStream = trainsStream.keyBy(value -> value.id);
+        DataStream<Vehicle> reducedStream = keyedStream.reduce(new ReduceFunction<Vehicle>() {
+                    @Override
+                    public Vehicle reduce(Vehicle v1, Vehicle v2)
+                            throws Exception {
+                        if (v1.lastupdate.compareTo(v2.lastupdate) < 0)
+                            return v2;
+                        else
+                            return v1;
+                    }
+                });
+
+
+        SingleOutputStreamOperator<String> printStream = reducedStream.map(new MapFunction<Vehicle, String>() {
                 @Override
                 public String map(Vehicle v) throws Exception {
                     return "trainID:"+ v.id + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
                 }
-        }).print();
+        });//.print();
 
 
+        final Path outputAllTrainsLastStop = new Path("tmp/lastStop");
+        final DefaultRollingPolicy<String, String> rollingPolicyLastStop = DefaultRollingPolicy
+                .builder()
+                .withMaxPartSize(MemorySize.ofMebiBytes(1))
+                .withRolloverInterval(Duration.ofSeconds(60))
+                .build();
+        final FileSink<String> lastStopSink = FileSink
+                .<String>forRowFormat(outputAllTrainsLastStop, new SimpleStringEncoder<>())
+                .withRollingPolicy(rollingPolicyLastStop)
+                .build();
+
+        //PrintSinkFunction<Vehicle> refreshSink = new PrintSinkFunction<>("Refresh");
+
+        //reducedStream.addSink(refreshSink);
+        printStream.sinkTo(lastStopSink).name("laststop-sink");
         env.execute(JOB_NAME);
 
+    }
+
+    private static class ExtractLastStopMapFunction implements MapFunction<Vehicle, Tuple3<String, Long, Date>> {
+        @Override
+        public Tuple3<String, Long, Date> map(Vehicle vehicle) throws Exception {
+            // Extract relevant information (train ID, last reported stop, and last update time)
+            return Tuple3.of(vehicle.id, vehicle.laststopid, vehicle.lastupdate);
+        }
     }
     private static JsonNode mapToJson(String jsonString) {
         try {
