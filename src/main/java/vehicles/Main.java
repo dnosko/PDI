@@ -1,11 +1,15 @@
 package vehicles;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.Data;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.*;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
+import org.apache.flink.api.common.typeinfo.Types;
+import org.apache.flink.api.java.functions.KeySelector;
+import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
@@ -18,16 +22,21 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 
 import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 
+import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.util.Collector;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
@@ -119,10 +128,8 @@ public class Main {
 
         printStream.sinkTo(lastStopSink).name("laststop-sink");
         /**************************************************************************************/
-        //env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-        //TODO Funguje ale iba v ramci toho 10 sekundoveho okna a nie globalne lol..
-
-
+        //env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
+        //TODO GLOBALNE meskanie vypisovat seznam nejvýše 5 zpožděných vozů seřazených sestupně podle jejich posledně hlášeného zpoždění od startu aplikace
 
         /*DataStream<Vehicle> delayedVehicles =
                 vehicleStream.filter(v -> v.delay > 0.0)
@@ -137,19 +144,59 @@ public class Main {
 
         //delayedVehicles.print();
 
-        /* Top 5 delayed in 3 minutes window TODO nefunguje radenie :)))))) */
-        vehicleStream.filter(v -> v.delay > 0.0)
-                .keyBy(v -> v.vtype)
+        /* Top 5 delayed in 3 minutes window TODO nefunguje radenie a ma to byt bez allWindows iba windows :)))))) mozno pridat tie watermarks */
+        DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
+                .<Vehicle>forMonotonousTimestamps()
+                .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
                 .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(30)))
-                .process(new WindowDelayed())
+                .apply(new WindowDelayed())
                 .map((MapFunction<Vehicle, String>) v -> "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate)
                 .print()
                 .setParallelism(1);
         /*************************************/
+        /* Average for 3 minutes across all vehicles */
+        DataStream<Tuple2<String, Double>> keyDelayStream = vehicleStream
+                .assignTimestampsAndWatermarks(WatermarkStrategy
+                        .<Vehicle>forMonotonousTimestamps()
+                        .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
+                .map(v -> new Tuple2<>(v.id, v.getDelay()))
+                .returns(Types.TUPLE(Types.STRING, Types.DOUBLE));
+        keyDelayStream.windowAll(TumblingEventTimeWindows.of(Time.minutes(3))).aggregate(new AverageAggregate())
+                .print();
+
+
         env.execute(JOB_NAME);
 
     }
 
+    private static class AverageWindowFunction
+            extends ProcessWindowFunction<Double, Tuple2<String, Double>, String, TimeWindow> {
+
+        public void process(String key,
+                            Context context,
+                            Iterable<Double> averages,
+                            Collector<Tuple2<String, Double>> out) {
+            Double average = averages.iterator().next();
+            out.collect(new Tuple2<>(key, average));
+        }
+    }
+
+    public static class ProcessAggregationWindow implements WindowFunction<Tuple2<String, Double>, Double, String, TimeWindow> {
+
+        @Override
+        public void apply(String s, TimeWindow timeWindow, Iterable<Tuple2<String, Double>> values, Collector<Double> out) throws Exception {
+            double sum = 0.0;
+            int count = 0;
+
+            for (Tuple2<String, Double> value : values) {
+                sum += value.f1;
+                count ++;
+            }
+
+            double avg = sum/count;
+            out.collect(avg);
+        }
+    }
 
     public static class WindowDelayed extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow>  {
 
