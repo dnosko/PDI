@@ -20,7 +20,7 @@ public class Vehicle {
     long routeid;
     String course;
     String lf;
-    @Getter
+
     double delay;
     long laststopid;
     long finalstopid;
@@ -45,6 +45,14 @@ public class Vehicle {
             this.isinactive = attributes.path("isinactive").asText();
             this.lastupdate = new Date(attributes.path("lastupdate").asLong());
         }
+
+    public double getDelay() {
+        return delay;
+    }
+
+    public long getLastUpdateLong(){
+            return lastupdate.getTime();
+    }
 
     @Override
         public String toString() {

@@ -23,6 +23,7 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 
+import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFunction;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
@@ -119,89 +120,60 @@ public class Main {
         printStream.sinkTo(lastStopSink).name("laststop-sink");
         /**************************************************************************************/
         //env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        //TODO Funguje ale iba v ramci toho 10 sekundoveho okna a nie globalne lol..
 
 
-        //DataStream<Vehicle> delayedVehicles =  vehicleStream.filter(v -> v.delay > 0.0).keyBy(v -> v.vtype).flatMap(new AllTimeDelayed());
-        DataStream<Vehicle> delayedVehicles = vehicleStream.filter(v -> v.delay > 0.0)
+
+        /*DataStream<Vehicle> delayedVehicles =
+                vehicleStream.filter(v -> v.delay > 0.0)
                 .keyBy(v -> v.vtype)
                 .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
-                .apply(new WindowFunction());
-        delayedVehicles.map(new MapFunction<Vehicle, String>() {
+                        .process(new WindowFunction()).map(new MapFunction<Vehicle, String>() {
             @Override
             public String map(Vehicle v) throws Exception {
                 return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
             }
-        }).print();
-                //.flatMap(new AllTimeDelayed());
-                /*.keyBy(v -> v.id).reduce(new ReduceFunction<Vehicle>() {
-                    @Override
-                    public Vehicle reduce(Vehicle v1, Vehicle v2) {
-                        // Choose the vehicle with the higher delay
-                        return v1.delay >= v2.delay ? v1 : v2;
-                    }
-                });
+        }).print().setParallelism(1);*/
 
+        //delayedVehicles.print();
 
-        */
+        /* Top 5 delayed in 3 minutes window TODO nefunguje radenie :)))))) */
+        vehicleStream.filter(v -> v.delay > 0.0)
+                .keyBy(v -> v.vtype)
+                .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(30)))
+                .process(new WindowDelayed())
+                .map((MapFunction<Vehicle, String>) v -> "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate)
+                .print()
+                .setParallelism(1);
+        /*************************************/
         env.execute(JOB_NAME);
 
     }
 
-    public static class TopMaxDelaysProcessFunction extends KeyedProcessFunction<String, Vehicle, Vehicle> {
-        private static final int TOP_N = 5;
 
-        private PriorityQueue<Vehicle> topDelaysQueue;
+    public static class WindowDelayed extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow>  {
 
         @Override
-        public void open(Configuration parameters) throws Exception {
-            topDelaysQueue = new PriorityQueue<>(TOP_N, (v1, v2) -> Double.compare(v2.delay, v1.delay));
-        }
-
-        @Override
-        public void processElement(Vehicle vehicle, Context context, Collector<Vehicle> collector) throws Exception {
-            topDelaysQueue.offer(vehicle);
-
-            if (topDelaysQueue.size() > TOP_N) {
-                topDelaysQueue.poll(); // Remove the lowest priority element
-            }
-        }
-
-        @Override
-        public void onTimer(long timestamp, OnTimerContext ctx, Collector<Vehicle> out) throws Exception {
-            // Emit the top delayed vehicles when the timer fires
-            for (Vehicle vehicle : topDelaysQueue) {
-                out.collect(vehicle);
-            }
-            topDelaysQueue.clear();
-        }
-
-        @Override
-        public void close() throws Exception {
-            topDelaysQueue.clear();
-        }
-    }
-
-    public static class WindowFunction implements AllWindowFunction<Vehicle, Vehicle, TimeWindow> {
-        @Override
-        public void apply(TimeWindow timeWindow, Iterable<Vehicle> v, Collector<Vehicle> out) throws Exception {
+        public void process(ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow>.Context context, Iterable<Vehicle> v, Collector<Vehicle> out) throws Exception {
             List<Vehicle> vehicles = new ArrayList<>();
-            System.out.println("i am here");
+            int topN = 5;
             for (Vehicle vehicle : v) {
                 if (vehicle != null)
                     vehicles.add(vehicle);
             }
-            System.out.println("i am here 2");
+
             // Sort the vehicles by delay
             vehicles.sort(Comparator.comparingDouble(Vehicle::getDelay).reversed());
 
-            int topCount = Math.min(vehicles.size(), 5);
+            int topCount = Math.min(vehicles.size(), topN);
             List<Vehicle> top5Vehicles = vehicles.subList(0, topCount);
-            System.out.println("i am here" + topCount + " " + top5Vehicles.size());
-            for (Vehicle ve: top5Vehicles)
+            top5Vehicles.sort(Comparator.comparingLong(Vehicle::getLastUpdateLong));
+            //System.out.println("i am here" + topCount + " " + top5Vehicles.size());
+            for (Vehicle ve: top5Vehicles) {
                 out.collect(ve);
-
-
+            }
         }
+
     }
 
 
