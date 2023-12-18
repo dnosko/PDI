@@ -13,16 +13,15 @@ import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.streaming.api.datastream.*;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
-import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
 import org.asynchttpclient.Dsl;
@@ -40,7 +39,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 
 @Slf4j
 public class Main {
@@ -82,7 +80,7 @@ public class Main {
                 .build();
 
         northStream.sinkTo(northSink).name("north-sink");
-        /************************************************************************************/
+
         /* Trains with last stops */
 
         DataStream<Vehicle> trainsStream = vehicleStream.filter(new FilterFunction<Vehicle>() {
@@ -91,7 +89,6 @@ public class Main {
                 return v.ltype == 1;
             }
         });
-
 
         trainsStream.keyBy(value -> value.id).reduce(new ReduceFunction<Vehicle>() {
             @Override
@@ -104,11 +101,12 @@ public class Main {
             }
         });
 
-        SingleOutputStreamOperator<String> printStream = trainsStream.map(new MapFunction<Vehicle, String>() {
-                @Override
-                public String map(Vehicle v) throws Exception {
-                    return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
-                }
+        SingleOutputStreamOperator<String> printStream =
+                trainsStream.map(new MapFunction<Vehicle, String>() {
+            @Override
+            public String map(Vehicle v) throws Exception {
+                return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
+            }
         });//.print();
 
 
@@ -123,20 +121,17 @@ public class Main {
                 .withRollingPolicy(rollingPolicyLastStop)
                 .build();
 
+
+
         //PrintSinkFunction<Vehicle> refreshSink = new PrintSinkFunction<>("Refresh");
 
         //reducedStream.addSink(refreshSink);
         printStream.sinkTo(lastStopSink).name("laststop-sink");
+        /**************************************************************************************/
+
+        
         env.execute(JOB_NAME);
 
-    }
-
-    private static class ExtractLastStopMapFunction implements MapFunction<Vehicle, Tuple3<String, Long, Date>> {
-        @Override
-        public Tuple3<String, Long, Date> map(Vehicle vehicle) throws Exception {
-            // Extract relevant information (train ID, last reported stop, and last update time)
-            return Tuple3.of(vehicle.id, vehicle.laststopid, vehicle.lastupdate);
-        }
     }
     private static JsonNode mapToJson(String jsonString) {
         try {
