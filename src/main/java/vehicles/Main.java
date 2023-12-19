@@ -58,10 +58,10 @@ public class Main {
         DataStream<Vehicle> vehicleStream = jsonStream.map(s -> mapToVehicle(s)).filter(new IsActiveFilter());
         env.enableCheckpointing(CHECKPOINTING_INTERVAL_MS);
         env.setRestartStrategy(RestartStrategies.noRestart());
-        //vehicleStream.print();
 
 
-        /* Vehicles going North */ //TODO potom urobit na to nejaku mozno factory? alebo nieco nech to je pekne podla prepinacov...
+        /* Vehicles going North */
+        //TODO potom urobit na to nejaku mozno factory? alebo nieco nech to je pekne podla prepinacov...
         // TODO upravit JSON format na nejaky krajsi po riadkoch?
        DataStream<Vehicle> northStream = vehicleStream.filter(new goingNorth());
         //northStream.print();
@@ -78,24 +78,10 @@ public class Main {
 
         northStream.sinkTo(northSink).name("north-sink");
 
-        /* Trains with last stops */
+        /* Trains with last stops
+        * Nie som si ista ci to funguje uplne spravne hh ten flatmap ci nema byt tiez cez nejake globalne okno napr. */
 
-        DataStream<Vehicle> trainsStream = vehicleStream.filter(new FilterFunction<Vehicle>() {
-            @Override
-            public boolean filter(Vehicle v) throws Exception {
-                return v.ltype == 5;
-            }
-        });
-
-        trainsStream.keyBy(value -> value.id).flatMap(new LastStops());
-
-       SingleOutputStreamOperator<String> printStream =
-                trainsStream.map(new MapFunction<Vehicle, String>() {
-            @Override
-            public String map(Vehicle v) throws Exception {
-                return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
-            }
-        });//.print();*/
+       SingleOutputStreamOperator<String> printTrainLastStop =  trainLastStop(vehicleStream);//.print();*/
 
 
         final Path outputAllTrainsLastStop = new Path("tmp/lastStop");
@@ -109,75 +95,93 @@ public class Main {
                 .withRollingPolicy(rollingPolicyLastStop)
                 .build();
 
-        printStream.sinkTo(lastStopSink).name("laststop-sink");
+        printTrainLastStop.sinkTo(lastStopSink).name("laststop-sink");
         /**************************************************************************************/
         //env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 
-        /* top 5 delayed vehicles of all time, sorting doesnt work...*/
-        DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
-                .<Vehicle>forMonotonousTimestamps()
-                .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()));
 
-        delayedStream.windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
-                .process(new MostDelayedProcessAllWindowFunction())
-            .map(new MapFunction<Vehicle, String>() {
-            @Override
-            public String map(Vehicle v) throws Exception {
-                return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
-            }
-        }).print().setParallelism(1);
+        /* top delayed vehicles since start of application, sorting doesnt work...*/
+        //mostDelayedVehicles(vehicleStream).print().setParallelism(1);
 
-        //delayedVehicles.print();
 
-        /* Top 5 delayed in 3 minutes window
-        TODO nefunguje radenie a ma to byt allWindows lebo nechcem grupovat cez kluce a  skusit urobit cez aggregate ako average??? */
-        /*DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
-                .<Vehicle>forMonotonousTimestamps()
-                .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
-                .flatMap(new AllTimeDelayed()).windowAll(TumblingProcessingTimeWindows.of(Time.seconds(30)))
-                .map((MapFunction<Vehicle, String>) v -> "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate)
-                .print()
-                .setParallelism(1);*/
-        /*************************************/
+        /* top 5 delayed vehicles in 3 minutes window, sorting doesnt work..*/
+        int windowMinutes = 1;
+        mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).print().setParallelism(1);
 
         /* Average for 3 minutes across all vehicles */
-        DataStream<Tuple2<String, Double>> keyDelayStream = vehicleStream
-                .assignTimestampsAndWatermarks(WatermarkStrategy
-                        .<Vehicle>forMonotonousTimestamps()
-                        .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
-                .map(v -> new Tuple2<>(v.id, v.getDelay()))
-                .returns(Types.TUPLE(Types.STRING, Types.DOUBLE));
-        keyDelayStream.windowAll(TumblingEventTimeWindows.of(Time.minutes(3))).aggregate(new AverageAggregate());
-                //.print();
+        int delayWindowInMinutes = 3;
+        averageDelay(vehicleStream, delayWindowInMinutes);
 
         env.execute(JOB_NAME);
 
     }
 
 
-    public static class WindowDelayed extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow>  {
+    /* Counts average delay across all vehicles in time window of N minutes*/
+    private static SingleOutputStreamOperator<Double> averageDelay(DataStream<Vehicle> vehicleStream, int minutes){
+        DataStream<Tuple2<String, Double>> keyDelayStream = vehicleStream
+                .assignTimestampsAndWatermarks(WatermarkStrategy
+                        .<Vehicle>forMonotonousTimestamps()
+                        .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
+                .map(v -> new Tuple2<>(v.id, v.getDelay()))
+                .returns(Types.TUPLE(Types.STRING, Types.DOUBLE));
 
-        @Override
-        public void process(ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow>.Context context, Iterable<Vehicle> v, Collector<Vehicle> out) throws Exception {
-            List<Vehicle> vehicles = new ArrayList<>();
-            int topN = 5;
-            for (Vehicle vehicle : v) {
-                if (vehicle != null)
-                    vehicles.add(vehicle);
+        return keyDelayStream.windowAll(TumblingEventTimeWindows.of(Time.minutes(minutes))).aggregate(new AverageAggregate());
+    }
+
+    /* Most delayed vehicles in time window specified by minutes
+     * TODO sorting doesnt work yet
+     * */
+    private static SingleOutputStreamOperator<String> mostDelayedVehiclesInWindow(DataStream<Vehicle> vehicleStream, int minutes){
+        DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
+                .<Vehicle>forMonotonousTimestamps()
+                .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()));
+
+        return delayedStream.windowAll(TumblingProcessingTimeWindows.of(Time.minutes(minutes)))
+                .process(new MostDelayedInWindow())
+                .map(new MapFunction<Vehicle, String>() {
+                    @Override
+                    public String map(Vehicle v) throws Exception {
+                        return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
+                    }
+                });
+    }
+
+    /* Outputs stream of most delayed vehicles since start of application, outputing resulsts every 10 seconds. .
+    * TODO sorting doesnt work yet
+    * */
+    private static SingleOutputStreamOperator<String> mostDelayedVehicles(DataStream<Vehicle> vehicleStream){
+        DataStream<Vehicle> delayedStream = vehicleStream.filter(v -> v.delay > 0.0).assignTimestampsAndWatermarks(WatermarkStrategy
+                .<Vehicle>forMonotonousTimestamps()
+                .withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()));
+
+        return delayedStream.windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
+                .process(new MostDelayedGlobally())
+                .map(new MapFunction<Vehicle, String>() {
+                    @Override
+                    public String map(Vehicle v) throws Exception {
+                        return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
+                    }
+                });
+    }
+
+    /* Converts input stream into stream filtering only trains and showing their last stops */
+    private static SingleOutputStreamOperator<String> trainLastStop(DataStream<Vehicle> vehicleStream){
+        DataStream<Vehicle> trainsStream = vehicleStream.filter(new FilterFunction<Vehicle>() {
+            @Override
+            public boolean filter(Vehicle v) throws Exception {
+                return v.ltype == 5;
             }
+        });
 
-            // Sort the vehicles by delay
-            vehicles.sort(Comparator.comparingDouble(Vehicle::getDelay).reversed());
+        trainsStream.keyBy(value -> value.id).flatMap(new LastStops());
 
-            int topCount = Math.min(vehicles.size(), topN);
-            List<Vehicle> top5Vehicles = vehicles.subList(0, topCount);
-            top5Vehicles.sort(Comparator.comparingLong(Vehicle::getLastUpdateLong));
-            //System.out.println("i am here" + topCount + " " + top5Vehicles.size());
-            for (Vehicle ve: top5Vehicles) {
-                out.collect(ve);
-            }
-        }
-
+       return trainsStream.map(new MapFunction<Vehicle, String>() {
+                    @Override
+                    public String map(Vehicle v) throws Exception {
+                        return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
+                    }
+                });
     }
 
 

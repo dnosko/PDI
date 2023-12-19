@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class MostDelayedProcessAllWindowFunction extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow> {
+public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow> {
     private transient ListState<Vehicle> mostDelayedVehicles;
     private final int topN = 5;
 
@@ -25,43 +25,37 @@ public class MostDelayedProcessAllWindowFunction extends ProcessAllWindowFunctio
 
     @Override
     public void process(Context context, Iterable<Vehicle> elements, Collector<Vehicle> out) throws Exception {
-        // add vehicles to new list for sorting
-        Iterable<Vehicle> current = mostDelayedVehicles.get();
+        mostDelayedVehicles.clear(); // clear state for the new window
+        System.out.println(mostDelayedVehicles);
         List<Vehicle> currentList = new ArrayList<>();
-
-        for (Vehicle v : current) {
-            currentList.add(v);
-        }
 
         // Update state with the new vehicles
         for (Vehicle vehicle : elements) {
             // test if vehicle with same id is already in list
-            Vehicle testIfAlreadyInList = vehicleAlreadyInList(mostDelayedVehicles.get(), vehicle);
+            Vehicle testIfAlreadyInList = vehicleAlreadyInList(currentList, vehicle);
             if (testIfAlreadyInList != null) {
                 // remove old vehicle instance so it can be replaced by the most recent record
                 currentList.remove(testIfAlreadyInList);
             }
             // add new vehicle to list
             currentList.add(vehicle);
-
         }
 
         currentList.sort(Comparator.comparing(Vehicle::getDelay).reversed());
 
-        mostDelayedVehicles.clear();
         // keep only topN delayed vehicles
         mostDelayedVehicles.addAll(currentList.subList(0, Math.min(topN, currentList.size())));
-
-        // Emit the two most delayed vehicles
+        System.out.println("In window");
+        // Emit the most delayed vehicles
         for (Vehicle vehicle : mostDelayedVehicles.get()) {
             out.collect(vehicle);
         }
     }
 
-    private Vehicle vehicleAlreadyInList(Iterable<Vehicle> elements, Vehicle v) {
-        for (Vehicle alredyIn : elements) {
-            if (v.getId().equals(alredyIn.getId())) {
-                return alredyIn;
+    private Vehicle vehicleAlreadyInList(List<Vehicle> elements, Vehicle v) {
+        for (Vehicle alreadyIn : elements) {
+            if (v.getId().equals(alreadyIn.getId())) {
+                return alreadyIn;
             }
         }
         return null;
