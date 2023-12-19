@@ -26,7 +26,7 @@ public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehic
     @Override
     public void process(Context context, Iterable<Vehicle> elements, Collector<Vehicle> out) throws Exception {
         mostDelayedVehicles.clear(); // clear state for the new window
-        System.out.println(mostDelayedVehicles);
+
         List<Vehicle> currentList = new ArrayList<>();
 
         // Update state with the new vehicles

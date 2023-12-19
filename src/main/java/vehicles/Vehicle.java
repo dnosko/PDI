@@ -4,7 +4,6 @@ package vehicles;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Getter;
 
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
 
