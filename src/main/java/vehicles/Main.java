@@ -8,8 +8,6 @@ import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.connector.file.sink.FileSink;
@@ -31,9 +29,6 @@ import java.util.*;
 /**
  * TODO:
  * pridat prepinace
- * urobit do funkcii jednotlive tasky
- * urobit triedy pre tie specialne funkcie a nemat to tu pokope v jednom
- * prehodit websocket do vlasnej triedy
  * urobit testy
  * **/
 @Slf4j
@@ -172,7 +167,7 @@ public class Main {
     }
 
     /* Filter vehicles going in the north direction */
-    private static DataStream<Vehicle> vehiclesGoingNorth(DataStream<Vehicle> vehicleStream){
+    public static DataStream<Vehicle> vehiclesGoingNorth(DataStream<Vehicle> vehicleStream){
         return vehicleStream.filter(new goingNorth());
     }
 

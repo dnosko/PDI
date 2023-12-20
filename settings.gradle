@@ -1,2 +1,6 @@
 rootProject.name = "vehicles"
+include 'src:test:java'
+findProject(':src:test:java')?.name = 'java'
+include 'src:test'
+findProject(':src:test')?.name = 'test'
 

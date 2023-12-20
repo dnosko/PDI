@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Getter;
 
 import java.util.Date;
+import java.util.Objects;
 
 
 public class Vehicle {
@@ -46,6 +47,26 @@ public class Vehicle {
             this.lastupdate = new Date(attributes.path("lastupdate").asLong());
         }
 
+
+    public Vehicle(String id, short vtype, double bearing, int lineid, String linename, int delay, int laststopid, Long lastupdate){
+        this.id = id;
+        this.vtype = vtype;
+        this.ltype = vtype;
+        this.lat =  0.0;
+        this.lng = 0.0;
+        this.bearing = bearing;
+        this.lineid = lineid;
+        this.linename = linename;
+        this.routeid = 0;
+        this.course = "";
+        this.lf = "";
+        this.delay = delay;
+        this.laststopid = laststopid;
+        this.finalstopid = -1;
+        this.isinactive = "false";
+        this.lastupdate = new Date(lastupdate);
+    }
+
     public double getDelay() {
         return delay;
     }
@@ -76,7 +97,29 @@ public class Vehicle {
                     '}';
         }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Vehicle vehicle = (Vehicle) obj;
 
+        return vtype == vehicle.vtype &&
+                ltype == vehicle.ltype &&
+                Double.compare(vehicle.lat, lat) == 0 &&
+                Double.compare(vehicle.lng, lng) == 0 &&
+                Double.compare(vehicle.bearing, bearing) == 0 &&
+                lineid == vehicle.lineid &&
+                routeid == vehicle.routeid &&
+                Double.compare(vehicle.delay, delay) == 0 &&
+                laststopid == vehicle.laststopid &&
+                finalstopid == vehicle.finalstopid &&
+                id.equals(vehicle.id) &&
+                linename.equals(vehicle.linename) &&
+                course.equals(vehicle.course) &&
+                lf.equals(vehicle.lf) &&
+                isinactive.equals(vehicle.isinactive) &&
+                lastupdate.equals(vehicle.lastupdate);
+    }
 }
 
 

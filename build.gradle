@@ -40,6 +40,7 @@ dependencies {
     implementation "org.apache.flink:flink-clients:1.18.0"
     implementation "org.apache.flink:flink-streaming-java:1.18.0"
     implementation "org.apache.flink:flink-connector-files:1.18.0"
+    implementation "org.apache.flink:flink-test-utils:1.18.0"
     // Dependencies that should be part of the shadow jar, e.g. connectors. These must be in the flinkShadowJar configuration!
     runtimeOnly "org.apache.logging.log4j:log4j-slf4j-impl:2.21.1"
     runtimeOnly "org.apache.logging.log4j:log4j-api:2.21.1"
@@ -74,7 +75,13 @@ compileJava {
 
 test {
     useJUnitPlatform()
+    sourceSets {
+        test {
+            java.srcDirs = ['src/test/java']
+        }
+    }
 }
+
 
 run {
     classpath = sourceSets.main.runtimeClasspath
