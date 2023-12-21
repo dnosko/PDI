@@ -114,7 +114,7 @@ public class Main {
 
         /* Average for 3 minutes across all vehicles idk ci ok s tym stringom*/
         int delayWindowInMinutes = 1;
-        //averageDelay(vehicleStream, delayWindowInMinutes).print();
+        //agverageDelay(vehicleStream, delayWindowInMinutes).map(v -> "Average delay:" + v.toString()).print();
 
         /* Average time between input data with 10 latest records for each vehicle */
        averageTimeBetweenRecords(vehicleStream, 10).print();
@@ -132,19 +132,15 @@ public class Main {
     }
 
     /* Counts average delay across all vehicles in time window of N minutes*/
-    private static SingleOutputStreamOperator<String> averageDelay(DataStream<Vehicle> vehicleStream, int minutes){
-        DataStream<Tuple2<String, Double>> keyDelayStream = vehicleStream
+    public static SingleOutputStreamOperator<Double> averageDelay(DataStream<Vehicle> vehicleStream, int minutes){
+        return vehicleStream
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<Vehicle>forMonotonousTimestamps().withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
-                .map(v -> new Tuple2<>(v.id, v.getDelay()))
-                .returns(Types.TUPLE(Types.STRING, Types.DOUBLE));
-
-        return keyDelayStream
                 .windowAll(TumblingEventTimeWindows.of(Time.minutes(minutes)))
-                .aggregate(new AverageAggregate()).map(v -> "Average delay:" + v.toString());
+                .aggregate(new AverageAggregate());
     }
 
     /* Most delayed vehicles in time window specified by minutes
-     * TODO sorting doesnt work yet
+     * TODO sorting doesnt work yet - sorting by date from most old to newest
      * */
     public static SingleOutputStreamOperator<Vehicle> mostDelayedVehiclesInWindow(DataStream<Vehicle> vehicleStream, int minutes){
        return vehicleStream
@@ -156,7 +152,7 @@ public class Main {
     }
 
     /* Outputs stream of most delayed vehicles since start of application, outputing resulsts every 10 seconds. .
-    * TODO sorting doesnt work yet
+    * TODO sorting doesnt work yet - asi nastavit iba paraleizmus? env.setParallelism(1)
     * */
     public static SingleOutputStreamOperator<Vehicle> mostDelayedVehicles(DataStream<Vehicle> vehicleStream){
         return vehicleStream.filter(v -> v.delay > 0.0)

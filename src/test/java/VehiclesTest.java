@@ -10,7 +10,7 @@ import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.VoidSerializer;
 import org.apache.flink.api.java.functions.KeySelector;
-
+import org.apache.flink.api.java.tuple.Tuple2;
 
 import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
@@ -53,7 +53,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
-
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -120,6 +120,65 @@ public class VehiclesTest {
 
         testHarness.close();
         return expected;
+    }
+
+    private static <K, IN, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutputAverage(
+            OneInputStreamOperator<IN, OUT> operator,
+            KeySelector<IN, K> keySelector,
+            TypeInformation<K> keyType,
+            List<IN> elementsWindow1, List<IN> elementsWindow2, Long firstWindowEndTime)
+            throws Exception {
+
+        KeyedOneInputStreamOperatorTestHarness<K, IN, OUT> testHarness =
+                new KeyedOneInputStreamOperatorTestHarness<>(operator, keySelector, keyType);
+
+        testHarness.open();
+
+        testHarness.setProcessingTime(0);
+        testHarness.processWatermark(0);
+
+        for(IN element: elementsWindow1) {
+            System.out.println(element);
+            testHarness.processElement(new StreamRecord<>(element,10000L));
+        }
+
+        // provoke any processing-time/event-time triggers
+        testHarness.setProcessingTime(10050L);
+        testHarness.processWatermark(10050L);
+
+        ConcurrentLinkedQueue<Object> expected = testHarness.getOutput();
+
+        System.out.println("output:" + testHarness.getOutput());
+
+        for (Object el : expected) {
+            System.out.println("First window:" + el);
+        }
+        //assertEquals(testHarness.getOutput().size(), 1);
+
+        for(IN element: elementsWindow2) {
+            System.out.println(element);
+            testHarness.processElement(new StreamRecord<>(element, 70000L));
+        }
+
+
+        long secondWindowEndTime = Integer.MAX_VALUE;
+        testHarness.setProcessingTime(secondWindowEndTime);
+        testHarness.processWatermark(Integer.MAX_VALUE);
+        expected = testHarness.getOutput();
+
+        ConcurrentLinkedQueue<Object> expectedResultsOnly = new ConcurrentLinkedQueue<>();
+
+        for (Object el : expected) {
+            System.out.println("Secondd window:" + el);
+            if (el instanceof StreamRecord) {
+                expectedResultsOnly.add(el);
+            }
+        }
+        // check if it records are two..
+        assertEquals(2,  expectedResultsOnly.size());
+
+        testHarness.close();
+        return  expectedResultsOnly;
     }
 
     @Test
@@ -270,6 +329,68 @@ public class VehiclesTest {
 
         TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())
+        );
+    }
+
+    @Test
+    public void testGlobalAverageDelay() throws Exception {
+        long timeWindow1 = 10000L;
+        long timeWindow2 = 60000L;
+        long firstWindowEndTime = 60050L;
+        int minute = 1;
+        // result 100 + 60 + 10 + 50 + 1 + 8 / 6 = 38.1666666667
+        Vehicle A = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow1);
+        Vehicle B = new Vehicle("2", (short) 1, 0, 2, "L2", 60, 20, timeWindow1);
+        Vehicle C = new Vehicle("3", (short) 5, 90, 1, "L1", 10, 80,timeWindow1);
+        Vehicle D = new Vehicle("4", (short) 5, 45, 4, "L3", 50, 15, timeWindow1 +1000);
+        Vehicle G = new Vehicle("7", (short) 5, 45, 4, "L3", 1, 15, timeWindow1+1000);
+        Vehicle E = new Vehicle("5", (short) 5, 90, 5, "L5", 8, 80, timeWindow1+1000);
+
+        // result A2,F2,B2,J,K
+        Vehicle F = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 80, timeWindow2);
+        Vehicle A2 = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow2);
+        Vehicle B2 = new Vehicle("2", (short) 1, 0, 2, "L2", 70, 20, timeWindow2);
+        Vehicle J = new Vehicle("8", (short) 5, 90, 6, "L6", 45, 80, timeWindow2 +1000);
+        Vehicle K = new Vehicle("5", (short) 5, 90, 6, "L6", 15, 80, timeWindow2 +1000);
+        Vehicle F2 = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 70, timeWindow2 + 1000);
+
+        List<Vehicle> input = Arrays.asList(A, B, C, D, G, E);
+        List<Vehicle> input2 = Arrays.asList(F,A2,B2,J,K,F2);
+
+
+        double averageWindow1 = (A.delay + B.delay + C.delay + D.delay + G.delay + E.delay) / input.size();
+        double averageWindow2 = (F.delay + A2.delay + B2.delay + J.delay + K.delay + F2.delay) / input2.size();
+
+        // expected results
+        ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
+        expected.add(new StreamRecord<>(averageWindow1,59999));
+        expected.add(new StreamRecord<>(averageWindow2,119999));
+
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1); // Set parallelism as needed
+        env.setStateBackend(new MemoryStateBackend());
+
+
+        DataStream<Vehicle> inputStream = env.fromCollection(input);
+        DataStream<Double> window1 = Main.averageDelay(inputStream, minute);
+
+        OneInputTransformation<Vehicle, Double> transform =
+                (OneInputTransformation<Vehicle, Double>) window1.getTransformation();
+        OneInputStreamOperator<Vehicle, Double> operator =
+                transform.getOperator();
+        assertTrue(operator instanceof WindowOperator);
+        WindowOperator<Vehicle, Vehicle, ?, ?, ?> winOperator =
+                (WindowOperator<Vehicle, Vehicle, ?, ?, ?>) operator;
+
+        ConcurrentLinkedQueue<Object> results = processElementAndEnsureOutputAverage(
+                winOperator,
+                winOperator.getKeySelector(),
+                TypeInformation.of(Vehicle.class),
+                input, input2 ,firstWindowEndTime);
+
+        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+                Comparator.comparing(streamRecord -> ((StreamRecord<Double>) streamRecord).getValue())
         );
     }
 

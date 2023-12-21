@@ -8,15 +8,15 @@ import org.apache.flink.api.java.tuple.Tuple2;
  * The accumulator is used to keep a running sum and a count. The {@code getResult} method
  * computes the average.
  */
-public class AverageAggregate implements AggregateFunction<Tuple2<String, Double>, Tuple2<Double, Long>, Double> {
+public class AverageAggregate implements AggregateFunction<Vehicle, Tuple2<Double, Long>, Double> {
     @Override
     public Tuple2<Double, Long> createAccumulator() {
         return new Tuple2<>(0.0, 0L);
     }
 
     @Override
-    public Tuple2<Double, Long> add(Tuple2<String, Double> value, Tuple2<Double, Long> accumulator) {
-        return new Tuple2<>(accumulator.f0 + value.f1, accumulator.f1 + 1L);
+    public Tuple2<Double, Long> add(Vehicle vehicle, Tuple2<Double, Long> accumulator) {
+        return new Tuple2<>(accumulator.f0 + vehicle.delay, accumulator.f1 + 1L);
     }
 
     @Override
