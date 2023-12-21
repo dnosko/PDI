@@ -95,7 +95,12 @@ public class Main {
 
 
         /* top delayed vehicles since start of application, sorting doesnt work...*/
-        //mostDelayedVehicles(vehicleStream).print().setParallelism(1);
+        mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
+            @Override
+            public String map(Vehicle v) throws Exception {
+                return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
+            }
+        }).print().setParallelism(1);
 
 
         /* top 5 delayed vehicles in 3 minutes window, sorting doesnt work..*/
@@ -153,17 +158,11 @@ public class Main {
     /* Outputs stream of most delayed vehicles since start of application, outputing resulsts every 10 seconds. .
     * TODO sorting doesnt work yet
     * */
-    private static SingleOutputStreamOperator<String> mostDelayedVehicles(DataStream<Vehicle> vehicleStream){
+    public static SingleOutputStreamOperator<Vehicle> mostDelayedVehicles(DataStream<Vehicle> vehicleStream){
         return vehicleStream.filter(v -> v.delay > 0.0)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<Vehicle>forMonotonousTimestamps().withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
                 .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
-                .process(new MostDelayedGlobally())
-                .map(new MapFunction<Vehicle, String>() {
-                    @Override
-                    public String map(Vehicle v) throws Exception {
-                        return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
-                    }
-                });
+                .process(new MostDelayedGlobally());
     }
 
     /* Filter vehicles going in the north direction */
