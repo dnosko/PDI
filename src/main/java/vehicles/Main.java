@@ -124,10 +124,10 @@ public class Main {
     }
 
     /* Calculates the average time between records for each vehicle within last N records */
-    private static SingleOutputStreamOperator<Tuple2<String, Double>> averageTimeBetweenRecords(DataStream<Vehicle> vehicleStream, int numberOfRecords){
-        return vehicleStream.map(v -> new Tuple2<>(v.id,v.getLastUpdateLong())).returns(Types.TUPLE(Types.STRING, Types.LONG))
-                .keyBy(v -> v.f0)
-                .countWindow(numberOfRecords)
+    public static SingleOutputStreamOperator<Tuple2<String, Double>> averageTimeBetweenRecords(DataStream<Vehicle> vehicleStream, int numberOfRecords){
+        return vehicleStream
+                .keyBy(v -> v.id)
+                .countWindow(numberOfRecords, 1)
                 .aggregate(new AverageRecords());
     }
 

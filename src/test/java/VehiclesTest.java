@@ -181,6 +181,47 @@ public class VehiclesTest {
         return  expectedResultsOnly;
     }
 
+    private static <K, IN, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutputAverageTime(
+            OneInputStreamOperator<IN, OUT> operator,
+            KeySelector<IN, K> keySelector,
+            TypeInformation<K> keyType,
+            List<IN> elements )
+            throws Exception {
+
+        KeyedOneInputStreamOperatorTestHarness<K, IN, OUT> testHarness =
+                new KeyedOneInputStreamOperatorTestHarness<>(operator, keySelector, keyType);
+
+        testHarness.open();
+
+        testHarness.setProcessingTime(0);
+        testHarness.processWatermark(0);
+
+        for(IN element: elements) {
+            System.out.println(element);
+            testHarness.processElement(new StreamRecord<>(element));
+        }
+
+        // provoke any processing-time/event-time triggers
+        testHarness.setProcessingTime(Integer.MAX_VALUE);
+        testHarness.processWatermark(Integer.MAX_VALUE);
+
+        ConcurrentLinkedQueue<Object> expected = testHarness.getOutput();
+
+        System.out.println("output:" + testHarness.getOutput());
+
+        ConcurrentLinkedQueue<Object> expectedResultsOnly = new ConcurrentLinkedQueue<>();
+
+        for (Object el : expected) {
+            System.out.println("Secondd window:" + el);
+            if (el instanceof StreamRecord) {
+                expectedResultsOnly.add(el);
+            }
+        }
+
+        testHarness.close();
+        return  expectedResultsOnly;
+    }
+
     @Test
     public void testVehiclesGoingNorth()  throws Exception {
 
@@ -392,6 +433,98 @@ public class VehiclesTest {
         TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Double>) streamRecord).getValue())
         );
+    }
+
+    @Test
+    public void averageTimeBetweenRecordsTest() throws Exception {
+        int windowCount = 5;
+
+        Long vehicleTime = 1000L;
+        List<Long> timesBetweenA = Arrays.asList(vehicleTime, vehicleTime*2,vehicleTime*3,vehicleTime*4,vehicleTime*5);
+        // diff: 500, 1500, 750, 1450, 1000
+        // 0.5, 1.0, 0.916666666667, 1.050, 1.175
+        List<Long> timesBetweenB = Arrays.asList(vehicleTime, vehicleTime*2 - 500,vehicleTime*3,vehicleTime*4 -250,vehicleTime*5 +200,
+                vehicleTime*6 +200);
+
+        List<Vehicle> input = new ArrayList<Vehicle>();
+        String keyA = "1";
+        String keyB = "2";
+
+        for (int i = 0; i < timesBetweenA.size(); i++){
+            input.add(new Vehicle(keyA, (short) 5, 340, 1, "L1", 100, 10, timesBetweenA.get(i)));
+            input.add(new Vehicle(keyB, (short) 1, 0, 2, "L2", 60, 20, timesBetweenB.get(i)));
+        }
+        // B has one element more than A
+        input.add(new Vehicle(keyB, (short) 1, 0, 2, "L2", 60, 20, timesBetweenB.get(timesBetweenB.size()-1)));
+
+        // A is constant so its always 1 except first result, when it doesnt have anything to be compare with
+        double resultA = 1.0;
+        List<Double> resultsB = new ArrayList<>(timesBetweenB.size());
+        List<Double> diffB = new ArrayList<>(timesBetweenB.size()-1);
+        resultsB.add(0.0);
+        int count = 1;
+        double diff, sum, avg;
+        int skip = 1;
+
+        for (int i = 1; i < timesBetweenB.size(); i++){
+            diff = timesBetweenB.get(i) - timesBetweenB.get(i-1);
+            diffB.add(diff);
+            if (diffB.size() > windowCount -1) { // imitate the sliding window of size 1
+                sum = diffB.stream().skip(skip).mapToDouble(Double::doubleValue).sum();
+                avg = sum/(count-skip);
+                skip++;
+            }
+            else {
+                sum = diffB.stream().mapToDouble(Double::doubleValue).sum();
+                avg = sum/count;
+            }
+            resultsB.add(avg);
+            count++;
+        }
+
+        // expected results
+        ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
+        expected.add(new StreamRecord<>( new Tuple2<String, Double>(keyA, 0.0),Long.MAX_VALUE));
+        expected.add(new StreamRecord<>( new Tuple2<String, Double>(keyB, 0.0),Long.MAX_VALUE));
+
+        double resultBInSeconds;
+        for (int i = 1; i < timesBetweenA.size(); i++){
+            resultBInSeconds = resultsB.get(i)/1000;
+            expected.add(new StreamRecord<>( new Tuple2<String, Double>(keyA, resultA),Long.MAX_VALUE));
+            expected.add(new StreamRecord<>( new Tuple2<String, Double>(keyB, resultBInSeconds),Long.MAX_VALUE));
+        }
+        resultBInSeconds = resultsB.get(resultsB.size()-1) / 1000;
+        // B has one more record
+        expected.add(new StreamRecord<>( new Tuple2<String, Double>(keyB, resultBInSeconds),Long.MAX_VALUE));
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1); // Set parallelism as needed
+        env.setStateBackend(new MemoryStateBackend());
+
+
+        DataStream<Vehicle> inputStream = env.fromCollection(input);
+        DataStream<Tuple2<String, Double>> window1 = Main.averageTimeBetweenRecords(inputStream, windowCount);
+
+        OneInputTransformation<Vehicle, Tuple2<String, Double>> transform =
+                (OneInputTransformation<Vehicle, Tuple2<String, Double>>) window1.getTransformation();
+        OneInputStreamOperator<Vehicle, Tuple2<String, Double>> operator =
+                transform.getOperator();
+        assertTrue(operator instanceof WindowOperator);
+        WindowOperator<Vehicle, Vehicle, ?, ?, ?> winOperator =
+                (WindowOperator<Vehicle, Vehicle, ?, ?, ?>) operator;
+
+        ConcurrentLinkedQueue<Object> results = processElementAndEnsureOutputAverageTime(
+                winOperator,
+                winOperator.getKeySelector(),
+                TypeInformation.of(Vehicle.class),
+                input);
+
+        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+                Comparator.comparing(streamRecord -> ((StreamRecord<Tuple2<String, Double>>) streamRecord).getValue().f0)
+                        .thenComparing(streamRecord -> ((StreamRecord<Tuple2<String, Double>>) streamRecord).getValue().f1)
+        );
+
+
     }
 
     // from https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/datastream/testing/
