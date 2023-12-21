@@ -71,6 +71,7 @@ import static org.junit.Assert.assertEquals;
 public class VehiclesTest {
     Main main = new Main();
 
+    // body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
     private static <K, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutput(
             OneInputStreamOperator<Vehicle, OUT> operator,
             KeySelector<Vehicle, K> keySelector,
@@ -109,6 +110,72 @@ public class VehiclesTest {
         Vehicle F = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 80, timeWindow2);
 
         List<Vehicle> elements2 = List.of(A2,E,F);
+
+        for(Vehicle element: elements2)
+            testHarness.processElement(new StreamRecord<>(element));
+
+
+
+        long secondWindowEndTime = Integer.MAX_VALUE;
+        testHarness.setProcessingTime(secondWindowEndTime);
+        //testHarness.processWatermark(secondWindowEndTime);
+        expected = testHarness.getOutput();
+
+
+        for (Object el : expected) {
+            System.out.println("Secondd window:" + el);
+        }
+
+
+        // we at least get the two watermarks and should also see an output element
+        assertEquals(testHarness.getOutput().size(), 10);
+
+        testHarness.close();
+        return expected;
+    }
+
+    //TODO upravit tuto funkciu a predchadzajucu tak ze bude brat input1 a input2 a zaroven aj nastavenie processing time ATD vsetky volitelne parametere..
+    private static <K, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutputTimedWindow(
+            OneInputStreamOperator<Vehicle, OUT> operator,
+            KeySelector<Vehicle, K> keySelector,
+            TypeInformation<K> keyType,
+            List<Vehicle> elements)
+            throws Exception {
+
+        KeyedOneInputStreamOperatorTestHarness<K, Vehicle, OUT> testHarness =
+                new KeyedOneInputStreamOperatorTestHarness<>(operator, keySelector, keyType);
+
+        testHarness.open();
+
+        testHarness.setProcessingTime(0);
+        //testHarness.processWatermark(Integer.MIN_VALUE);
+
+        for(Vehicle element: elements)
+            testHarness.processElement(new StreamRecord<>(element));
+
+        // provoke any processing-time/event-time triggers
+        long firstWindowEndTime = 60050L;
+        testHarness.setProcessingTime(firstWindowEndTime);
+        //testHarness.processWatermark(firstWindowEndTime);
+
+        ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
+        expected = testHarness.getOutput();
+
+
+        for (Object el : expected) {
+            System.out.println("First window:" + el);
+        }
+        assertEquals(testHarness.getOutput().size(), 5);
+
+        long timeWindow2 = 60000L;
+        Vehicle F = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 80, timeWindow2);
+        Vehicle A2 = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow2);
+        Vehicle B2 = new Vehicle("2", (short) 1, 0, 2, "L2", 70, 20, timeWindow2);
+        Vehicle J = new Vehicle("8", (short) 5, 90, 6, "L6", 45, 80, timeWindow2 +1000);
+        Vehicle K = new Vehicle("5", (short) 5, 90, 6, "L6", 15, 80, timeWindow2 +1000);
+        Vehicle F2 = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 70, timeWindow2 + 1000);
+
+        List<Vehicle> elements2 = List.of(F, A2, B2, J,K,F2);
 
         for(Vehicle element: elements2)
             testHarness.processElement(new StreamRecord<>(element));
@@ -219,30 +286,49 @@ public class VehiclesTest {
     }
 
     @Test
-    public void mostDelayedVehiclesInWindow(){
+    public void mostDelayedVehiclesInWindow()  throws Exception {
         long timeWindow1 = 10000L;
-        long timeWindow2 = 20000L;
+        long timeWindow2 = 60000L;
+        // result A,B,D,C,E
         Vehicle A = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow1);
         Vehicle B = new Vehicle("2", (short) 1, 0, 2, "L2", 60, 20, timeWindow1);
         Vehicle C = new Vehicle("3", (short) 5, 90, 1, "L1", 10, 80,timeWindow1);
-        Vehicle D = new Vehicle("4", (short) 5, 45, 4, "L3", 50, 15, timeWindow1 );
-        Vehicle G = new Vehicle("7", (short) 5, 45, 4, "L3", 1, 15, timeWindow1);
-        Vehicle E = new Vehicle("5", (short) 5, 90, 5, "L5", 8, 80, timeWindow2);
+        Vehicle D = new Vehicle("4", (short) 5, 45, 4, "L3", 50, 15, timeWindow1 +1000);
+        Vehicle G = new Vehicle("7", (short) 5, 45, 4, "L3", 1, 15, timeWindow1+1000);
+        Vehicle E = new Vehicle("5", (short) 5, 90, 5, "L5", 8, 80, timeWindow1+1000);
+
+        // result A2,F2,B2,J,K
         Vehicle F = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 80, timeWindow2);
+        Vehicle A2 = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow2);
+        Vehicle B2 = new Vehicle("2", (short) 1, 0, 2, "L2", 70, 20, timeWindow2);
+        Vehicle J = new Vehicle("8", (short) 5, 90, 6, "L6", 45, 80, timeWindow2 +1000);
+        Vehicle K = new Vehicle("5", (short) 5, 90, 6, "L6", 15, 80, timeWindow2 +1000);
+        Vehicle F2 = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 70, timeWindow2 + 1000);
+
+        ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
+        // first window
+        expected.add(new StreamRecord<>(A,59999));
+        expected.add(new StreamRecord<>(B,59999));
+        expected.add(new StreamRecord<>(D,59999));
+        expected.add(new StreamRecord<>(C,59999));
+        expected.add(new StreamRecord<>(E,59999));
+        // second window 59999
+        expected.add(new StreamRecord<>(A2,119999));
+        expected.add(new StreamRecord<>(F2,119999));
+        expected.add(new StreamRecord<>(B2,119999));
+        expected.add(new StreamRecord<>(J,119999));
+        expected.add(new StreamRecord<>(K,119999));
+
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1); // Set parallelism as needed
         env.setStateBackend(new MemoryStateBackend());
 
-        List<Vehicle> input = Arrays.asList(A, B, C, D, G);
-
-        TypeSerializer<List<Vehicle>> vehicleSerializer = TypeInformation.of(new TypeHint<List<Vehicle>>() {}).createSerializer(new ExecutionConfig());
+        List<Vehicle> input = Arrays.asList(A, B, C, D, G, E);
 
 
         DataStream<Vehicle> inputStream = env.fromCollection(input);
-        DataStream<Vehicle> window1 = Main.mostDelayedVehicles(inputStream);
-                /*inputStream.windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
-                        .process(new MostDelayedGlobally());*/
+        DataStream<Vehicle> window1 = Main.mostDelayedVehiclesInWindow(inputStream, 1);
 
         OneInputTransformation<Vehicle, Vehicle> transform =
                 (OneInputTransformation<Vehicle, Vehicle>)
@@ -253,26 +339,11 @@ public class VehiclesTest {
         WindowOperator<Vehicle, Vehicle, ?, ?, ?> winOperator =
                 (WindowOperator<Vehicle, Vehicle, ?, ?, ?>) operator;
 
-        ConcurrentLinkedQueue<Object> results = processElementAndEnsureOutput(
+        ConcurrentLinkedQueue<Object> results = processElementAndEnsureOutputTimedWindow(
                 winOperator,
                 winOperator.getKeySelector(),
                 TypeInformation.of(Vehicle.class),
                 input);
-
-
-        ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
-        // first window
-        expected.add(new StreamRecord<>(A,9999));
-        expected.add(new StreamRecord<>(B,9999));
-        expected.add(new StreamRecord<>(D,9999));
-        expected.add(new StreamRecord<>(C,9999));
-        expected.add(new StreamRecord<>(G,9999));
-        // second window
-        expected.add(new StreamRecord<>(B,19999));
-        expected.add(new StreamRecord<>(D,19999));
-        expected.add(new StreamRecord<>(C,19999));
-        expected.add(new StreamRecord<>(E,19999));
-        expected.add(new StreamRecord<>(F,19999));
 
         TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())

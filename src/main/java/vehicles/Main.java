@@ -105,7 +105,12 @@ public class Main {
 
         /* top 5 delayed vehicles in 3 minutes window, sorting doesnt work..*/
         int windowMinutes = 1;
-        //mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).print().setParallelism(1);
+        //mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
+        //                    @Override
+        //                    public String map(Vehicle v) throws Exception {
+        //                        return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
+        //                    }
+        //                }).print().setParallelism(1);
 
         /* Average for 3 minutes across all vehicles idk ci ok s tym stringom*/
         int delayWindowInMinutes = 1;
@@ -141,18 +146,13 @@ public class Main {
     /* Most delayed vehicles in time window specified by minutes
      * TODO sorting doesnt work yet
      * */
-    private static SingleOutputStreamOperator<String> mostDelayedVehiclesInWindow(DataStream<Vehicle> vehicleStream, int minutes){
+    public static SingleOutputStreamOperator<Vehicle> mostDelayedVehiclesInWindow(DataStream<Vehicle> vehicleStream, int minutes){
        return vehicleStream
                 .filter(v -> v.delay > 0.0)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<Vehicle>forMonotonousTimestamps().withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
                 .windowAll(TumblingProcessingTimeWindows.of(Time.minutes(minutes)))
                 .process(new MostDelayedInWindow())
-                .map(new MapFunction<Vehicle, String>() {
-                    @Override
-                    public String map(Vehicle v) throws Exception {
-                        return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
-                    }
-                });
+               ;
     }
 
     /* Outputs stream of most delayed vehicles since start of application, outputing resulsts every 10 seconds. .
