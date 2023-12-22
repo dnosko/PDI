@@ -5,25 +5,17 @@ import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.*;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.serialization.SimpleStringEncoder;
-import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.configuration.MemorySize;
-import org.apache.flink.connector.file.sink.FileSink;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import lombok.extern.slf4j.Slf4j;
-import java.time.Duration;
-import java.util.*;
 
 
 /**
@@ -32,7 +24,7 @@ import java.util.*;
  * urobit testy
  * **/
 @Slf4j
-public class Main {
+public class VehiclesStream {
     public static final int CHECKPOINTING_INTERVAL_MS = 5000;
     private static final String JOB_NAME = "Streaming Argis data";
     public static void main(String[] args) throws Exception {
@@ -94,7 +86,7 @@ public class Main {
             int delayWindowInMinutes = 1;
             averageDelay(vehicleStream, delayWindowInMinutes).map(v -> "Average delay:" + v.toString()).print();
         }
-        else if (parameters.has("6") || (parameters.has("ten"))) {
+        else if (parameters.has("6") || (parameters.has("diff"))) {
             int sizeOfWindow = 10;
             averageTimeBetweenRecords(vehicleStream, sizeOfWindow).map(new MapFunction<Tuple2<String, Double>,String>() {
                 @Override
@@ -193,7 +185,7 @@ public class Main {
         System.out.println("  -3, --delayed   Stream top 5 delayed vehicles since start of application ");
         System.out.println("  -4, --delayedw   Stream top 5 delayed vehicles in 3 minute windows");
         System.out.println("  -5, --average   Counts global average of delay in 3 minute windows");
-        System.out.println("  -6, --ten   Counts average time between incoming records for last 10 records for each vehicle");
+        System.out.println("  -6, --diff   Counts average time between incoming records for last 10 records for each vehicle");
     }
 
     /* Calculates the average time between records for each vehicle within last N records */

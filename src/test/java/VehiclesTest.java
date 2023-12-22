@@ -69,7 +69,7 @@ import static org.junit.Assert.assertEquals;
 
 
 public class VehiclesTest {
-    Main main = new Main();
+    VehiclesStream stream = new VehiclesStream();
 
     // body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
     private static <K, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutput(
@@ -204,7 +204,7 @@ public class VehiclesTest {
 
         ConcurrentLinkedQueue<Object> expected = testHarness.getOutput();
 
-        System.out.println("output:" + testHarness.getOutput());
+        //System.out.println("output:" + testHarness.getOutput());
 
         ConcurrentLinkedQueue<Object> expectedResultsOnly = new ConcurrentLinkedQueue<>();
 
@@ -232,7 +232,7 @@ public class VehiclesTest {
         CollectSink collector = new CollectSink();
 
         DataStream<Vehicle> vehicleStream = env.fromElements(A, B, C, D);
-        main.vehiclesGoingNorth(vehicleStream).addSink(collector);
+        stream.vehiclesGoingNorth(vehicleStream).addSink(collector);
 
         env.execute();
 
@@ -260,7 +260,6 @@ public class VehiclesTest {
         env.setParallelism(1);
         env.setStateBackend(new MemoryStateBackend());
 
-        //DataStream<Vehicle> vehicleStream = env.fromElements(A, B, C, D );
 
         List<Vehicle> input = Arrays.asList(A, B, C, D);
         List<Vehicle> input2 = List.of(A2,C2,E);
@@ -280,8 +279,10 @@ public class VehiclesTest {
 
 
         DataStream<Vehicle> inputStream = env.fromElements(A,B,C,D,A2,E,C2);
-        DataStream<Vehicle> window1 = Main.trainLastStop(inputStream);
-
+        DataStream<Vehicle> window1 = stream.trainLastStop(inputStream);
+        // body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
+        // applies also for the code below
+        //TODO mozno upravit do funkcie ...
         OneInputTransformation<Vehicle, Vehicle> transform =
                 (OneInputTransformation<Vehicle, Vehicle>)
                         window1.getTransformation();
@@ -301,6 +302,7 @@ public class VehiclesTest {
         TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())
         );
+        /******************************************************************************************************************/
 
 
 
@@ -343,7 +345,7 @@ public class VehiclesTest {
 
 
         DataStream<Vehicle> inputStream = env.fromCollection(input);
-        DataStream<Vehicle> window1 = Main.mostDelayedVehicles(inputStream);
+        DataStream<Vehicle> window1 = stream.mostDelayedVehicles(inputStream);
 
         OneInputTransformation<Vehicle, Vehicle> transform =
                 (OneInputTransformation<Vehicle, Vehicle>)
@@ -381,14 +383,14 @@ public class VehiclesTest {
 
         // result A2,F2,B2,J,K
         Vehicle F = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 80, timeWindow2);
-        Vehicle A2 = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow2);
+        Vehicle I = new Vehicle("10", (short) 5, 340, 1, "L1", 90, 10, timeWindow2);
         Vehicle B2 = new Vehicle("2", (short) 1, 0, 2, "L2", 70, 20, timeWindow2 +2000);
         Vehicle J = new Vehicle("8", (short) 5, 90, 6, "L6", 45, 80, timeWindow2 +1000);
         Vehicle K = new Vehicle("5", (short) 5, 90, 6, "L6", 15, 80, timeWindow2 +1100);
         Vehicle F2 = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 70, timeWindow2 + 1000);
 
         List<Vehicle> input = Arrays.asList(A, B, C, D, G, E);
-        List<Vehicle> input2 = Arrays.asList(F,A2,B2,J,K,F2);
+        List<Vehicle> input2 = Arrays.asList(F,I,B2,J,K,F2);
 
         ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
         // first window
@@ -398,7 +400,7 @@ public class VehiclesTest {
         expected.add(new StreamRecord<>(E,59999));
         expected.add(new StreamRecord<>(D,59999));
         // second window 59999
-        expected.add(new StreamRecord<>(A2,119999));
+        expected.add(new StreamRecord<>(I,119999));
         expected.add(new StreamRecord<>(F2,119999));
         expected.add(new StreamRecord<>(J,119999));
         expected.add(new StreamRecord<>(K,119999));
@@ -411,7 +413,7 @@ public class VehiclesTest {
 
 
         DataStream<Vehicle> inputStream = env.fromCollection(input);
-        DataStream<Vehicle> window1 = Main.mostDelayedVehiclesInWindow(inputStream, 1);
+        DataStream<Vehicle> window1 = stream.mostDelayedVehiclesInWindow(inputStream, 1);
 
         OneInputTransformation<Vehicle, Vehicle> transform =
                 (OneInputTransformation<Vehicle, Vehicle>)
@@ -474,7 +476,7 @@ public class VehiclesTest {
 
 
         DataStream<Vehicle> inputStream = env.fromCollection(input);
-        DataStream<Double> window1 = Main.averageDelay(inputStream, minute);
+        DataStream<Double> window1 = stream.averageDelay(inputStream, minute);
 
         OneInputTransformation<Vehicle, Double> transform =
                 (OneInputTransformation<Vehicle, Double>) window1.getTransformation();
@@ -563,7 +565,7 @@ public class VehiclesTest {
 
 
         DataStream<Vehicle> inputStream = env.fromCollection(input);
-        DataStream<Tuple2<String, Double>> window1 = Main.averageTimeBetweenRecords(inputStream, windowCount);
+        DataStream<Tuple2<String, Double>> window1 = stream.averageTimeBetweenRecords(inputStream, windowCount);
 
         OneInputTransformation<Vehicle, Tuple2<String, Double>> transform =
                 (OneInputTransformation<Vehicle, Tuple2<String, Double>>) window1.getTransformation();

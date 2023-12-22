@@ -47,7 +47,7 @@ public class Vehicle {
             this.lastupdate = new Date(attributes.path("lastupdate").asLong());
         }
 
-
+    // for constructing test mock data
     public Vehicle(String id, short vtype, double bearing, int lineid, String linename, int delay, int laststopid, Long lastupdate){
         this.id = id;
         this.vtype = vtype;
