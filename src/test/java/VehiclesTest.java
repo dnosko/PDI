@@ -317,14 +317,14 @@ public class VehiclesTest {
         Vehicle C = new Vehicle("3", (short) 5, 90, 1, "L1", 10, 80,timeWindow1);
         Vehicle D = new Vehicle("4", (short) 5, 45, 4, "L3", 50, 15, timeWindow1 +1000);
         Vehicle G = new Vehicle("7", (short) 5, 45, 4, "L3", 1, 15, timeWindow1+1000);
-        Vehicle E = new Vehicle("5", (short) 5, 90, 5, "L5", 8, 80, timeWindow1+1000);
+        Vehicle E = new Vehicle("5", (short) 5, 90, 5, "L5", 10, 80, timeWindow1+1000);
 
         // result A2,F2,B2,J,K
         Vehicle F = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 80, timeWindow2);
         Vehicle A2 = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow2);
-        Vehicle B2 = new Vehicle("2", (short) 1, 0, 2, "L2", 70, 20, timeWindow2);
+        Vehicle B2 = new Vehicle("2", (short) 1, 0, 2, "L2", 70, 20, timeWindow2 +2000);
         Vehicle J = new Vehicle("8", (short) 5, 90, 6, "L6", 45, 80, timeWindow2 +1000);
-        Vehicle K = new Vehicle("5", (short) 5, 90, 6, "L6", 15, 80, timeWindow2 +1000);
+        Vehicle K = new Vehicle("5", (short) 5, 90, 6, "L6", 15, 80, timeWindow2 +1100);
         Vehicle F2 = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 70, timeWindow2 + 1000);
 
         List<Vehicle> input = Arrays.asList(A, B, C, D, G, E);
@@ -334,15 +334,15 @@ public class VehiclesTest {
         // first window
         expected.add(new StreamRecord<>(A,59999));
         expected.add(new StreamRecord<>(B,59999));
-        expected.add(new StreamRecord<>(D,59999));
         expected.add(new StreamRecord<>(C,59999));
         expected.add(new StreamRecord<>(E,59999));
+        expected.add(new StreamRecord<>(D,59999));
         // second window 59999
         expected.add(new StreamRecord<>(A2,119999));
         expected.add(new StreamRecord<>(F2,119999));
-        expected.add(new StreamRecord<>(B2,119999));
         expected.add(new StreamRecord<>(J,119999));
         expected.add(new StreamRecord<>(K,119999));
+        expected.add(new StreamRecord<>(B2,119999));
 
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();

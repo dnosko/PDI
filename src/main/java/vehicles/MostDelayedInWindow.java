@@ -41,10 +41,13 @@ public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehic
             currentList.add(vehicle);
         }
 
+        // leave only top 5 delayed vehicles
         currentList.sort(Comparator.comparing(Vehicle::getDelay).reversed());
+        currentList = currentList.subList(0, Math.min(topN, currentList.size()));
 
-        // keep only topN delayed vehicles
-        mostDelayedVehicles.addAll(currentList.subList(0, Math.min(topN, currentList.size())));
+        // sort by last update
+        currentList.sort(Comparator.comparing(Vehicle::getLastUpdateLong));
+        mostDelayedVehicles.addAll(currentList);
         System.out.println("In window");
         // Emit the most delayed vehicles
         for (Vehicle vehicle : mostDelayedVehicles.get()) {

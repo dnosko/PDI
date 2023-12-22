@@ -140,7 +140,7 @@ public class Main {
     }
 
     /* Most delayed vehicles in time window specified by minutes
-     * TODO sorting doesnt work yet - sorting by date from most old to newest
+     * TODO sorting works in tests takze skor vyriesit iba paralelizmus
      * */
     public static SingleOutputStreamOperator<Vehicle> mostDelayedVehiclesInWindow(DataStream<Vehicle> vehicleStream, int minutes){
        return vehicleStream
