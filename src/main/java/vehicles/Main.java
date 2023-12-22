@@ -75,7 +75,12 @@ public class Main {
         /* Trains with last stops
         * Nie som si ista ci to funguje uplne spravne hh ten flatmap ci nema byt tiez cez nejake globalne okno napr. */
 
-       SingleOutputStreamOperator<String> printTrainLastStop =  trainLastStop(vehicleStream);//.print();*/
+       SingleOutputStreamOperator<String> printTrainLastStop =  trainLastStop(vehicleStream).map(new MapFunction<Vehicle, String>() {
+            @Override
+            public String map(Vehicle v) throws Exception {
+                return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
+            }
+        });//.print();*/
 
 
         final Path outputAllTrainsLastStop = new Path("tmp/lastStop");
@@ -167,17 +172,12 @@ public class Main {
     }
 
     /* Converts input stream into stream filtering only trains and showing their last stops */
-    private static SingleOutputStreamOperator<String> trainLastStop(DataStream<Vehicle> vehicleStream){
+    public static SingleOutputStreamOperator<Vehicle> trainLastStop(DataStream<Vehicle> vehicleStream){
         return vehicleStream
-                .filter((FilterFunction<Vehicle>) v -> v.ltype == 5)
-                .keyBy(value -> value.id)
-                .flatMap(new LastStops())
-                .map(new MapFunction<Vehicle, String>() {
-                    @Override
-                    public String map(Vehicle v) throws Exception {
-                        return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
-                    }
-                });
+                .filter((FilterFunction<Vehicle>) v -> v.vtype == (short) 5)
+                .assignTimestampsAndWatermarks(WatermarkStrategy.<Vehicle>forMonotonousTimestamps().withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
+                .windowAll(TumblingProcessingTimeWindows.of(Time.seconds(10)))
+                .process(new LastStops());
     }
 
 

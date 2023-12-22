@@ -99,7 +99,6 @@ public class VehiclesTest {
         for (Object el : expected) {
             System.out.println("First window:" + el);
         }
-        assertEquals(testHarness.getOutput().size(), 5);
 
         for(Vehicle element: elementsWindow2)
             testHarness.processElement(new StreamRecord<>(element));
@@ -115,8 +114,6 @@ public class VehiclesTest {
             System.out.println("Secondd window:" + el);
         }
 
-        // check if it outputed together 10 resulsts
-        assertEquals(testHarness.getOutput().size(), 10);
 
         testHarness.close();
         return expected;
@@ -243,6 +240,69 @@ public class VehiclesTest {
         List<Vehicle> expectedResults = Arrays.asList(A, B, D);
 
         assertTrue(collectedResults.containsAll(expectedResults));
+
+    }
+
+    @Test
+    public void allTrainsLastStopsTest() throws Exception {
+        long timeWindow1 = 10000L;
+        long timeWindow2 = 20000L;
+        long firstWindowEndTime = 10050L;
+        Vehicle A = new Vehicle("1", (short) 5, 340, 1, "L1", 0, 10, timeWindow1);
+        Vehicle B = new Vehicle("2", (short) 5, 0, 2, "L2", 0, 20,timeWindow1);
+        Vehicle C = new Vehicle("3", (short) 5, 90, 1, "L1", 0, 80,timeWindow1);
+        Vehicle D = new Vehicle("4", (short) 5, 45, 4, "L3", 0, 15, timeWindow1 );
+        Vehicle A2 = new Vehicle("1", (short) 5, 340, 1, "L1", 0, 20,timeWindow2);
+        Vehicle C2 = new Vehicle("3", (short) 5, 90, 1, "L1", 0, 80,timeWindow2);
+        Vehicle E = new Vehicle("5", (short) 5, 90, 5, "L5", 8, 80, timeWindow2);
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        env.setStateBackend(new MemoryStateBackend());
+
+        //DataStream<Vehicle> vehicleStream = env.fromElements(A, B, C, D );
+
+        List<Vehicle> input = Arrays.asList(A, B, C, D);
+        List<Vehicle> input2 = List.of(A2,C2,E);
+
+        ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
+        // first window
+        expected.add(new StreamRecord<>(A,9999));
+        expected.add(new StreamRecord<>(B,9999));
+        expected.add(new StreamRecord<>(C,9999));
+        expected.add(new StreamRecord<>(D,9999));
+        // second window
+        expected.add(new StreamRecord<>(B,19999));
+        expected.add(new StreamRecord<>(D,19999));
+        expected.add(new StreamRecord<>(A2,19999));
+        expected.add(new StreamRecord<>(C2,19999));
+        expected.add(new StreamRecord<>(E,19999));
+
+
+        DataStream<Vehicle> inputStream = env.fromElements(A,B,C,D,A2,E,C2);
+        DataStream<Vehicle> window1 = Main.trainLastStop(inputStream);
+
+        OneInputTransformation<Vehicle, Vehicle> transform =
+                (OneInputTransformation<Vehicle, Vehicle>)
+                        window1.getTransformation();
+        OneInputStreamOperator<Vehicle, Vehicle> operator =
+                transform.getOperator();
+        assertTrue(operator instanceof WindowOperator);
+        WindowOperator<Vehicle, Vehicle, ?, ?, ?> winOperator =
+                (WindowOperator<Vehicle, Vehicle, ?, ?, ?>) operator;
+
+        ConcurrentLinkedQueue<Object> results = processElementAndEnsureOutput(
+                winOperator,
+                winOperator.getKeySelector(),
+                TypeInformation.of(Vehicle.class),
+                input, input2, firstWindowEndTime);
+
+
+        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+                Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())
+        );
+
+
 
     }
 
