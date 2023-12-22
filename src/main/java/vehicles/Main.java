@@ -36,8 +36,8 @@ public class Main {
     public static final int CHECKPOINTING_INTERVAL_MS = 5000;
     private static final String JOB_NAME = "Streaming Argis data";
     public static void main(String[] args) throws Exception {
-        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
         env.setRuntimeMode(RuntimeExecutionMode.STREAMING);
         // toto je pre lokalne spustenie a debugovanie.
         //final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
@@ -45,6 +45,7 @@ public class Main {
         //  inak z websocketu?2
 
         ParameterTool parameters = ParameterTool.fromArgs(args);
+
         env.getConfig().setGlobalJobParameters(parameters);
 
         DataStreamSource<String> mySocketStream = env.addSource(new WebSocketStream());
@@ -54,10 +55,64 @@ public class Main {
         env.setRestartStrategy(RestartStrategies.noRestart());
 
 
+        if (parameters.has("h") || (parameters.has("help"))) {
+            printHelp();
+            System.exit(0); // Terminate the program after printing help
+        }
+        else if (parameters.has("1") || (parameters.has("north"))) {
+            vehiclesGoingNorth(vehicleStream).print();
+        }
+        else if (parameters.has("2") || (parameters.has("trains"))) {
+            trainLastStop(vehicleStream).map(new MapFunction<Vehicle, String>() {
+                @Override
+                public String map(Vehicle v) throws Exception {
+                    return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
+                }
+            }).print();
+        }
+        else if (parameters.has("3") || (parameters.has("delayed"))) {
+            env.setParallelism(1);
+            mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
+                @Override
+                public String map(Vehicle v) throws Exception {
+                    return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
+                }
+            }).print();
+        }
+        else if (parameters.has("4") || (parameters.has("delayedw"))) {
+            int windowMinutes = 3;
+            env.setParallelism(1);
+            mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
+                @Override
+                public String map(Vehicle v) throws Exception {
+                    return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
+                }
+            }).print();
+
+        }
+        else if (parameters.has("5") || (parameters.has("average"))) {
+            int delayWindowInMinutes = 1;
+            averageDelay(vehicleStream, delayWindowInMinutes).map(v -> "Average delay:" + v.toString()).print();
+        }
+        else if (parameters.has("6") || (parameters.has("ten"))) {
+            int sizeOfWindow = 10;
+            averageTimeBetweenRecords(vehicleStream, sizeOfWindow).map(new MapFunction<Tuple2<String, Double>,String>() {
+                @Override
+                public  String map(Tuple2<String,Double> result) throws Exception {
+                    return "ID: " + result.f0 + " Average: " + result.f1;
+                }
+            }).print();
+        }
+        else {
+            vehicleStream.print();
+        }
+
+
+
         /* Vehicles going North */
         //TODO potom urobit na to nejaku mozno factory? alebo nieco nech to je pekne podla prepinacov...
         // TODO upravit JSON format na nejaky krajsi po riadkoch?
-       DataStream<Vehicle> northStream = vehiclesGoingNorth(vehicleStream);
+       /*DataStream<Vehicle> northStream = vehiclesGoingNorth(vehicleStream);
         //northStream.print();
         final Path outputNorth = new Path("tmp/north");
         final DefaultRollingPolicy<Vehicle, String> rollingPolicy = DefaultRollingPolicy
@@ -71,11 +126,11 @@ public class Main {
                 .build();
 
         northStream.sinkTo(northSink).name("north-sink");
-
+        */
         /* Trains with last stops
         * Nie som si ista ci to funguje uplne spravne hh ten flatmap ci nema byt tiez cez nejake globalne okno napr. */
 
-       SingleOutputStreamOperator<String> printTrainLastStop =  trainLastStop(vehicleStream).map(new MapFunction<Vehicle, String>() {
+       /*SingleOutputStreamOperator<String> printTrainLastStop =  trainLastStop(vehicleStream).map(new MapFunction<Vehicle, String>() {
             @Override
             public String map(Vehicle v) throws Exception {
                 return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
@@ -83,7 +138,7 @@ public class Main {
         });//.print();*/
 
 
-        final Path outputAllTrainsLastStop = new Path("tmp/lastStop");
+        /*final Path outputAllTrainsLastStop = new Path("tmp/lastStop");
         final DefaultRollingPolicy<String, String> rollingPolicyLastStop = DefaultRollingPolicy
                 .builder()
                 .withMaxPartSize(MemorySize.ofMebiBytes(1))
@@ -94,13 +149,13 @@ public class Main {
                 .withRollingPolicy(rollingPolicyLastStop)
                 .build();
 
-        printTrainLastStop.sinkTo(lastStopSink).name("laststop-sink");
+        printTrainLastStop.sinkTo(lastStopSink).name("laststop-sink");*/
         /**************************************************************************************/
         //env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 
 
         /* top delayed vehicles since start of application, sorting doesnt work...*/
-        mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
+        /*mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
             @Override
             public String map(Vehicle v) throws Exception {
                 return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
@@ -109,23 +164,36 @@ public class Main {
 
 
         /* top 5 delayed vehicles in 3 minutes window, sorting doesnt work..*/
-        int windowMinutes = 1;
-        //mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
-        //                    @Override
-        //                    public String map(Vehicle v) throws Exception {
-        //                        return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
-        //                    }
-        //                }).print().setParallelism(1);
+        /*int windowMinutes = 1;
+        mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
+                            @Override
+                            public String map(Vehicle v) throws Exception {
+                                return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
+                            }
+        }).print().setParallelism(1);*/
 
         /* Average for 3 minutes across all vehicles idk ci ok s tym stringom*/
         int delayWindowInMinutes = 1;
         //agverageDelay(vehicleStream, delayWindowInMinutes).map(v -> "Average delay:" + v.toString()).print();
 
         /* Average time between input data with 10 latest records for each vehicle */
-       averageTimeBetweenRecords(vehicleStream, 10).print();
+       //averageTimeBetweenRecords(vehicleStream, 10).print();
 
         env.execute(JOB_NAME);
 
+    }
+
+    private static void printHelp() {
+        System.out.println("Usage: FlinkJob [OPTIONS]");
+        System.out.println(" If no options are specified, the job will just print the stream of data.");
+        System.out.println("Options:");
+        System.out.println("  -h, --help   Print this help message");
+        System.out.println("  -1, --north   Stream only vehicles going north");
+        System.out.println("  -2, --trains   Stream all trains since start of application with their last stop and last update");
+        System.out.println("  -3, --delayed   Stream top 5 delayed vehicles since start of application ");
+        System.out.println("  -4, --delayedw   Stream top 5 delayed vehicles in 3 minute windows");
+        System.out.println("  -5, --average   Counts global average of delay in 3 minute windows");
+        System.out.println("  -6, --ten   Counts average time between incoming records for last 10 records for each vehicle");
     }
 
     /* Calculates the average time between records for each vehicle within last N records */
