@@ -31,11 +31,13 @@ dependencies {
     implementation "org.java-websocket:Java-WebSocket:1.5.4"
     implementation 'org.asynchttpclient:async-http-client:2.12.3'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
-    compileOnly 'org.projectlombok:lombok:1.18.22'
     annotationProcessor 'org.projectlombok:lombok:1.18.22'
     implementation 'javax.xml.bind:jaxb-api:2.3.1'
-    implementation 'ch.qos.logback:logback-classic:1.2.9'
+    implementation 'ch.qos.logback:logback-classic:1.4.14'
+    implementation 'org.slf4j:slf4j-api:1.7.36'
 
+
+    compileOnly 'org.projectlombok:lombok:1.18.22'
 
     // Compile-time dependencies that should NOT be part of the shadow (uber) jar and are provided in the lib folder of Flink
     implementation 'org.apache.flink:flink-json:1.18.0'
