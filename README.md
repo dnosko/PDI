@@ -4,7 +4,9 @@ Data is streamed through WebSocket from ArcGIS Stream Service: [Source](https://
 
 ## Installation
 
-Option `--output` is optional for both local and cluster run. If it's not specified for the local run, the result is displayed in stdout. If it's not specified for run on cluster, then the output can be found at [flink local page](http://localhost:8081/#/overview) for the specified job.
+Option `--output` is optional for both local and cluster run. If it's not specified for the local run, the result is displayed in stdout. If it's not specified for run on cluster, then the output can be found at [flink local page](http://localhost:8081/#/overview) for the specified job. \
+
+Java 11, apache Flink 1.18 and Gradle 7.6.3 is required (gradle should be installed automatically when running the script.)
 
 ### Options:
 
@@ -21,12 +23,12 @@ when no option or one that isn't specified here is used, the application prints 
 
 ### Local run:
 
-`./gradlew build` \
-`./gradlew run` \
-`java -jar build/libs/vehicles-0.1-SNAPSHOT-fat.jar [OPTIONS] [--output <out>]` \
+`./gradlew run [args="OPTIONS"]` \
+Args can be OPTIONS mentioned above and/or `--output <out>`
 
 ### Run on cluster:
 
+`./gradlew build`
 `./gradlew shadowJar` \
 `<flink-bin-dir>/start-cluster.sh` \
 `<flink-bin-dir>/flink run ./build/libs/vehicles-0.1-SNAPSHOT-all.jar [OPTIONS] [--output <out>]` \
