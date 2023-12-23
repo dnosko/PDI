@@ -1,21 +1,29 @@
 package vehicles;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.Data;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.*;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.configuration.MemorySize;
+import org.apache.flink.connector.file.sink.FileSink;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import lombok.extern.slf4j.Slf4j;
+
+import java.time.Duration;
 
 
 /**
@@ -46,57 +54,73 @@ public class VehiclesStream {
         env.enableCheckpointing(CHECKPOINTING_INTERVAL_MS);
         env.setRestartStrategy(RestartStrategies.noRestart());
 
+        DataStream<String> outputStream = vehicleStream.map(Vehicle::toString);
+
 
         if (parameters.has("h") || (parameters.has("help"))) {
             printHelp();
             System.exit(0); // Terminate the program after printing help
         }
         else if (parameters.has("1") || (parameters.has("north"))) {
-            vehiclesGoingNorth(vehicleStream).print();
+            outputStream = vehiclesGoingNorth(vehicleStream).map(Vehicle::toString);
         }
         else if (parameters.has("2") || (parameters.has("trains"))) {
-            trainLastStop(vehicleStream).map(new MapFunction<Vehicle, String>() {
+            outputStream = trainLastStop(vehicleStream).map(new MapFunction<Vehicle, String>() {
                 @Override
                 public String map(Vehicle v) throws Exception {
                     return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
                 }
-            }).print();
+            });
         }
         else if (parameters.has("3") || (parameters.has("delayed"))) {
             env.setParallelism(1);
-            mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
+            outputStream = mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
                 @Override
                 public String map(Vehicle v) throws Exception {
                     return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
                 }
-            }).print();
+            });
         }
         else if (parameters.has("4") || (parameters.has("delayedw"))) {
             int windowMinutes = 3;
             env.setParallelism(1);
-            mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
+            outputStream = mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
                 @Override
                 public String map(Vehicle v) throws Exception {
                     return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
                 }
-            }).print();
+            });
 
         }
         else if (parameters.has("5") || (parameters.has("average"))) {
             int delayWindowInMinutes = 1;
-            averageDelay(vehicleStream, delayWindowInMinutes).map(v -> "Average delay:" + v.toString()).print();
+            outputStream = averageDelay(vehicleStream, delayWindowInMinutes).map(v -> "Average delay:" + v.toString());
         }
         else if (parameters.has("6") || (parameters.has("diff"))) {
             int sizeOfWindow = 10;
-            averageTimeBetweenRecords(vehicleStream, sizeOfWindow).map(new MapFunction<Tuple2<String, Double>,String>() {
+            outputStream = averageTimeBetweenRecords(vehicleStream, sizeOfWindow).map(new MapFunction<Tuple2<String, Double>,String>() {
                 @Override
                 public  String map(Tuple2<String,Double> result) throws Exception {
                     return "ID: " + result.f0 + " Average: " + result.f1;
                 }
-            }).print();
+            });
+        }
+
+        if (parameters.has("output")) {
+            final Path output = new Path(parameters.getRequired("output"));
+            final DefaultRollingPolicy<String, String> rollingPolicy = DefaultRollingPolicy
+                    .builder()
+                    .withMaxPartSize(MemorySize.ofMebiBytes(1))
+                    .withRolloverInterval(Duration.ofSeconds(10))
+                    .build();
+            final FileSink<String> fileSink = FileSink
+                    .<String>forRowFormat(output, new SimpleStringEncoder<>())
+                    .withRollingPolicy(rollingPolicy)
+                    .build();
+            outputStream.sinkTo(fileSink).name("file-sink");
         }
         else {
-            vehicleStream.print();
+            outputStream.print();
         }
 
 

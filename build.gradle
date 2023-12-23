@@ -13,7 +13,7 @@ plugins {
 
 group = 'vehicles'
 version = '0.1-SNAPSHOT'
-mainClassName = 'vehicles.Main'
+mainClassName = 'vehicles.VehiclesStream'
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
@@ -35,6 +35,8 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.22'
     implementation 'javax.xml.bind:jaxb-api:2.3.1'
     implementation 'ch.qos.logback:logback-classic:1.2.9'
+
+
     // Compile-time dependencies that should NOT be part of the shadow (uber) jar and are provided in the lib folder of Flink
     implementation 'org.apache.flink:flink-json:1.18.0'
     implementation "org.apache.flink:flink-clients:1.18.0"
@@ -100,7 +102,7 @@ jar {
 }
 
 shadowJar {
-    configurations = [project.configurations.flinkShadowJar]
+    configurations = [project.configurations.flinkShadowJar, project.configurations.runtimeClasspath]
 }
 
 task fatJar(type: Jar) {
