@@ -76,7 +76,7 @@ second window: B,D,C,E,F with value 19999
 
 ### Test: mostDelayedVehiclesInWindow
 
-Testing if funciton `mostDelayedVehiclesInWindow` correctly aggregates 5 most delayed vehicles for specified window, and only for the window, therefor it shoudn't take the values from the first window into second one. Since the function takes parameter for setting the size of window function in minutes, the test isn't done for 3 minutes windows, but only for 1 minute windows. The test also test the sorting by last update. Again testHarness util is used to simulate two windows.
+Testing if funciton `mostDelayedVehiclesInWindow` correctly aggregates 5 most delayed vehicles for specified window, and only for the window, therefor it shoudn't take the values from the first window into second one. Since the function takes parameter for setting the size of window function in minutes, the test isn't done for 3 minutes windows, but only for 1 minute windows. Sorting by last update and if equal then by delay is also tested. Again testHarness util is used to simulate two windows.
 
 #### Input:
 
@@ -100,8 +100,8 @@ F2 = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 70, timeWindow2 + 1000);
 
 #### Expected:
 
-for first window: A,B,C,E,D with value 59999\
-for second window: I,F2,J,K,B2 with value 119999
+for first window: A,B,C,D,E with value 59999\
+for second window: I,J,F2,K,B2 with value 119999
 
 ### Test: testGlobalAverageDelay
 

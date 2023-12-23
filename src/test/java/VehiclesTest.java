@@ -259,11 +259,11 @@ public class VehiclesTest {
                 input, input2, firstWindowEndTime);
 
 
-        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+        /*TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())
-        );
+        );*/
         /******************************************************************************************************************/
-
+        TestHarnessUtil.assertOutputEquals("Output not equal to expected", expected, results);
 
 
     }
@@ -323,9 +323,10 @@ public class VehiclesTest {
                 input, input2, firstWindowEndTime);
 
 
-        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+        /*TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())
-        );
+        );*/
+        TestHarnessUtil.assertOutputEquals("Output not equal to expected", expected, results);
     }
 
     @Test
@@ -393,9 +394,11 @@ public class VehiclesTest {
                 TypeInformation.of(Vehicle.class),
                 input, input2 ,firstWindowEndTime);
 
-        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
-                Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())
-        );
+        TestHarnessUtil.assertOutputEquals("Output not equal to expected", expected, results);
+
+        /*TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+                Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().hashCode())
+        );*/
     }
 
     @Test
@@ -454,9 +457,10 @@ public class VehiclesTest {
                 TypeInformation.of(Vehicle.class),
                 input, input2);
 
-        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+        /*TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Double>) streamRecord).getValue())
-        );
+        );*/
+        TestHarnessUtil.assertOutputEquals("Output not equal to expected", expected, results);
     }
 
     @Test
@@ -543,10 +547,11 @@ public class VehiclesTest {
                 TypeInformation.of(Vehicle.class),
                 input);
 
-        TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
+        /*TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Tuple2<String, Double>>) streamRecord).getValue().f0)
                         .thenComparing(streamRecord -> ((StreamRecord<Tuple2<String, Double>>) streamRecord).getValue().f1)
-        );
+        );*/
+        TestHarnessUtil.assertOutputEquals("Output not equal to expected", expected, results);
 
 
     }
