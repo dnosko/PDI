@@ -3,4 +3,6 @@ include 'src:test:java'
 findProject(':src:test:java')?.name = 'java'
 include 'src:test'
 findProject(':src:test')?.name = 'test'
+include 'src:test:java:dist_app_environment.vehicles'
+findProject(':src:test:java:dist_app_environment.vehicles')?.name = 'dist_app_environment.vehicles'
 

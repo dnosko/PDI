@@ -8,16 +8,17 @@ plugins {
     // Apply the Maven publish plugin to publish resulting artefacts into a Maven repository
     id 'maven-publish'
     // Apply the shadow plugin to produce fat JARs
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.github.johnrengelman.shadow' version '7.1.1'
 }
 
 group = 'vehicles'
 version = '0.1-SNAPSHOT'
-mainClassName = 'vehicles.VehiclesStream'
+mainClassName = 'dist_app_environment.vehicles.VehiclesStream'
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
+
 
 // https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/advanced/logging/#configuring-log4j-2
 // https://github.com/apache/flink/raw/master/flink-dist/src/main/flink-bin/conf/log4j-console.properties with removed appender.rolling to disable log.file
@@ -29,8 +30,8 @@ repositories {
 
 dependencies {
     implementation "org.java-websocket:Java-WebSocket:1.5.4"
-    implementation 'org.asynchttpclient:async-http-client:2.12.3'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
+    implementation "org.asynchttpclient:async-http-client:2.12.3"
+    implementation "com.fasterxml.jackson.core:jackson-databind:2.16.0"
     annotationProcessor 'org.projectlombok:lombok:1.18.22'
     implementation 'javax.xml.bind:jaxb-api:2.3.1'
     implementation 'ch.qos.logback:logback-classic:1.4.14'
@@ -40,7 +41,7 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.22'
 
     // Compile-time dependencies that should NOT be part of the shadow (uber) jar and are provided in the lib folder of Flink
-    implementation 'org.apache.flink:flink-json:1.18.0'
+    implementation "org.apache.flink:flink-json:1.18.0"
     implementation "org.apache.flink:flink-clients:1.18.0"
     implementation "org.apache.flink:flink-streaming-java:1.18.0"
     implementation "org.apache.flink:flink-connector-files:1.18.0"
@@ -73,17 +74,12 @@ sourceSets {
 }
 
 compileJava {
-    sourceCompatibility = '1.8'
-    targetCompatibility = '1.8'
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
 test {
     useJUnitPlatform()
-    sourceSets {
-        test {
-            java.srcDirs = ['src/test/java']
-        }
-    }
 }
 
 

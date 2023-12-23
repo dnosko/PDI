@@ -19,7 +19,7 @@
  * limitations under the License.
  */
 
-package vehicles;
+package dist_app_environment.vehicles;
 
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple4;

@@ -24,7 +24,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 For more information, please refer to <https://unlicense.org>
 */
-package vehicles;
+package dist_app_environment.vehicles;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.configuration.Configuration;

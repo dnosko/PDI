@@ -22,7 +22,7 @@ when no option or one that isn't specified here is used, the application prints 
 ### Local run:
 
 `./gradlew build` \
-`./gradlew fatJar` \
+`./gradlew run` \
 `java -jar build/libs/vehicles-0.1-SNAPSHOT-fat.jar [OPTIONS] [--output <out>]` \
 
 ### Run on cluster:

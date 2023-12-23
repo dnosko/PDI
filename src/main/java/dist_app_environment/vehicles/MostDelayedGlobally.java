@@ -1,4 +1,4 @@
-package vehicles;
+package dist_app_environment.vehicles;
 
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -12,8 +12,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/* Computes top N most delayed vehicles in a window sorted by time of update */
-public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow> {
+/* Keeps track of top N most delayed vehicles of all time. */
+public class MostDelayedGlobally extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow> {
     private transient ListState<Vehicle> mostDelayedVehicles;
     private final int topN = 5;
 
@@ -26,14 +26,20 @@ public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehic
 
     @Override
     public void process(Context context, Iterable<Vehicle> elements, Collector<Vehicle> out) throws Exception {
-        mostDelayedVehicles.clear(); // clear state for the new window
+        // add vehicles to new list for sorting
+        Iterable<Vehicle> current = mostDelayedVehicles.get();
 
         List<Vehicle> currentList = new ArrayList<>();
+        // copy the old list to a new one
+        for (Vehicle v : current) {
+            currentList.add(v);
+        }
+
 
         // Add new vehicles
         for (Vehicle vehicle : elements) {
             // test if vehicle with same id is already in list
-            Vehicle testIfAlreadyInList = vehicleAlreadyInList(currentList, vehicle);
+            Vehicle testIfAlreadyInList = vehicleAlreadyInList(mostDelayedVehicles.get(), vehicle);
             if (testIfAlreadyInList != null) {
                 // remove old vehicle instance so it can be replaced by the most recent record
                 currentList.remove(testIfAlreadyInList);
@@ -42,17 +48,12 @@ public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehic
             currentList.add(vehicle);
         }
 
-        // leave only top 5 delayed vehicles
+        // sort by descending order by delay
         currentList.sort(Comparator.comparing(Vehicle::getDelay).reversed());
-        currentList = currentList.subList(0, Math.min(topN, currentList.size()));
 
-        /* sort by last update from the oldest record to the newest.
-           When the timestamps are the same, it will sort by delay*/
-        currentList.sort(
-                Comparator.comparing(Vehicle::getLastUpdateLong).reversed()
-                        .thenComparing(Vehicle::getDelay).reversed()
-        );
-        mostDelayedVehicles.addAll(currentList);
+        mostDelayedVehicles.clear();
+        // keep only topN delayed vehicles
+        mostDelayedVehicles.addAll(currentList.subList(0, Math.min(topN, currentList.size())));
 
         // Emit the most delayed vehicles
         for (Vehicle vehicle : mostDelayedVehicles.get()) {
@@ -60,7 +61,7 @@ public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehic
         }
     }
 
-    private Vehicle vehicleAlreadyInList(List<Vehicle> elements, Vehicle v) {
+    private Vehicle vehicleAlreadyInList(Iterable<Vehicle> elements, Vehicle v) {
         for (Vehicle alreadyIn : elements) {
             if (v.getId().equals(alreadyIn.getId())) {
                 return alreadyIn;

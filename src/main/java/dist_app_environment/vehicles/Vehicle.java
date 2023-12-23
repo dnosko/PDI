@@ -1,4 +1,4 @@
-package vehicles;
+package dist_app_environment.vehicles;
 
 
 import com.fasterxml.jackson.databind.JsonNode;

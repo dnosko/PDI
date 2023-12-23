@@ -1,4 +1,4 @@
-package vehicles;
+package dist_app_environment.vehicles;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.api.common.RuntimeExecutionMode;
@@ -34,7 +34,7 @@ public class VehiclesStream {
         env.setRuntimeMode(RuntimeExecutionMode.STREAMING);
         ParameterTool parameters = ParameterTool.fromArgs(args);
 
-        env.getConfig().setGlobalJobParameters(parameters);
+        //env.getConfig().setGlobalJobParameters(parameters);
         env.enableCheckpointing(CHECKPOINTING_INTERVAL_MS);
         env.setRestartStrategy(RestartStrategies.noRestart());
 
@@ -42,7 +42,7 @@ public class VehiclesStream {
         DataStreamSource<String> mySocketStream = env.addSource(new WebSocketStream());
         DataStream<JsonNode> jsonStream = mySocketStream.map(jsonString -> mapToJson(jsonString));
         DataStream<Vehicle> vehicleStream = jsonStream.map(s -> mapToVehicle(s)).filter(new IsActiveFilter());
-
+        vehicleStream.print();
         // set stream
         DataStream<String> outputStream = vehicleStream.map(Vehicle::toString);
 
@@ -112,7 +112,6 @@ public class VehiclesStream {
         else {
             outputStream.print();
         }
-
         env.execute(JOB_NAME);
 
     }
