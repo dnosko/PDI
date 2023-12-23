@@ -18,7 +18,7 @@ import java.util.concurrent.BlockingQueue;
 import javax.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 
-// from https://gist.github.com/tonvanbart/17dc93be413f7c53b76567e10b87a141
+// from https://github.com/tonvanbart/flink-examples/blob/master/websocket-sourcefunction/src/main/java/org/vanbart/functions/WebSocketSourceFunction.java
 @Slf4j
 public class WebSocketStream extends RichSourceFunction<String> {
     private boolean running = true;

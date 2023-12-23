@@ -32,8 +32,25 @@ import static org.junit.Assert.assertEquals;
 public class VehiclesTest {
     VehiclesStream stream = new VehiclesStream();
 
-    // body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
+    /* body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
+     * Licensed to the Apache Software Foundation (ASF) under one
+     * or more contributor license agreements.  See the NOTICE file
+     * distributed with this work for additional information
+     * regarding copyright ownership.  The ASF licenses this file
+     * to you under the Apache License, Version 2.0 (the
+     * "License"); you may not use this file except in compliance
+     * with the License.  You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+    */
     private static <K, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutput(
+
             OneInputStreamOperator<Vehicle, OUT> operator,
             KeySelector<Vehicle, K> keySelector,
             TypeInformation<K> keyType,
@@ -80,6 +97,23 @@ public class VehiclesTest {
         return expected;
     }
 
+    /* body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
+     * Licensed to the Apache Software Foundation (ASF) under one
+     * or more contributor license agreements.  See the NOTICE file
+     * distributed with this work for additional information
+     * regarding copyright ownership.  The ASF licenses this file
+     * to you under the Apache License, Version 2.0 (the
+     * "License"); you may not use this file except in compliance
+     * with the License.  You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     */
     private static <K, IN, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutputAverage(
             OneInputStreamOperator<IN, OUT> operator,
             KeySelector<IN, K> keySelector,
@@ -139,6 +173,23 @@ public class VehiclesTest {
         return  expectedResultsOnly;
     }
 
+    /* body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
+     * Licensed to the Apache Software Foundation (ASF) under one
+     * or more contributor license agreements.  See the NOTICE file
+     * distributed with this work for additional information
+     * regarding copyright ownership.  The ASF licenses this file
+     * to you under the Apache License, Version 2.0 (the
+     * "License"); you may not use this file except in compliance
+     * with the License.  You may obtain a copy of the License at
+     *
+     * http://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     */
     private static <K, IN, OUT> ConcurrentLinkedQueue<Object> processElementAndEnsureOutputAverageTime(
             OneInputStreamOperator<IN, OUT> operator,
             KeySelector<IN, K> keySelector,
@@ -241,8 +292,26 @@ public class VehiclesTest {
 
         DataStream<Vehicle> inputStream = env.fromElements(A,B,C,D,A2,E,C2);
         DataStream<Vehicle> window1 = stream.trainLastStop(inputStream);
-        // body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
-        // applies also for the code in other test functions
+        /* body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
+         * Licensed to the Apache Software Foundation (ASF) under one
+         * or more contributor license agreements.  See the NOTICE file
+         * distributed with this work for additional information
+         * regarding copyright ownership.  The ASF licenses this file
+         * to you under the Apache License, Version 2.0 (the
+         * "License"); you may not use this file except in compliance
+         * with the License.  You may obtain a copy of the License at
+         *
+         * http://www.apache.org/licenses/LICENSE-2.0
+         *
+         * Unless required by applicable law or agreed to in writing, software
+         * distributed under the License is distributed on an "AS IS" BASIS,
+         * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+         * See the License for the specific language governing permissions and
+         * limitations under the License.
+             applies also for the code in other test functions
+        **********************************************************
+        * Applies also for the same code in functions below.
+        * */
         OneInputTransformation<Vehicle, Vehicle> transform =
                 (OneInputTransformation<Vehicle, Vehicle>)
                         window1.getTransformation();
@@ -258,10 +327,6 @@ public class VehiclesTest {
                 TypeInformation.of(Vehicle.class),
                 input, input2, firstWindowEndTime);
 
-
-        /*TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
-                Comparator.comparing(streamRecord -> ((StreamRecord<Vehicle>) streamRecord).getValue().getId())
-        );*/
         /******************************************************************************************************************/
         TestHarnessUtil.assertOutputEquals("Output not equal to expected", expected, results);
 
