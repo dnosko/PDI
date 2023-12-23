@@ -4,6 +4,11 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.api.common.functions.AggregateFunction;
 
+/**
+ * Body from: https://nightlies.apache.org/flink/flink-docs-release-1.18/docs/dev/datastream/operators/windows/
+ * The accumulator is used to keep a running sum and a count. The {@code getResult} method
+ * computes the average.
+ */
 public class AverageRecords
         implements AggregateFunction<Vehicle, Tuple4<String, Long, Long, Long>, Tuple2<String,Double>> {
 
@@ -31,7 +36,6 @@ public class AverageRecords
 
     @Override
     public Tuple2<String,Double> getResult(Tuple4<String, Long, Long, Long> accumulator) {
-        // Calculate the average time
         double averageTime;
 
         if (accumulator.f1 == 0) {

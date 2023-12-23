@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+/* Computes top N most delayed vehicles in a window sorted by time of update */
 public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow> {
     private transient ListState<Vehicle> mostDelayedVehicles;
     private final int topN = 5;
@@ -29,7 +30,7 @@ public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehic
 
         List<Vehicle> currentList = new ArrayList<>();
 
-        // Update state with the new vehicles
+        // Add new vehicles
         for (Vehicle vehicle : elements) {
             // test if vehicle with same id is already in list
             Vehicle testIfAlreadyInList = vehicleAlreadyInList(currentList, vehicle);
@@ -45,10 +46,14 @@ public class MostDelayedInWindow extends ProcessAllWindowFunction<Vehicle, Vehic
         currentList.sort(Comparator.comparing(Vehicle::getDelay).reversed());
         currentList = currentList.subList(0, Math.min(topN, currentList.size()));
 
-        // sort by last update
-        currentList.sort(Comparator.comparing(Vehicle::getLastUpdateLong));
+        /* sort by last update from the oldest record to the newest.
+           When the timestamps are the same, it will sort by delay*/
+        currentList.sort(
+                Comparator.comparing(Vehicle::getLastUpdateLong).reversed()
+                        .thenComparing(Vehicle::getDelay).reversed()
+        );
         mostDelayedVehicles.addAll(currentList);
-        System.out.println("In window");
+
         // Emit the most delayed vehicles
         for (Vehicle vehicle : mostDelayedVehicles.get()) {
             out.collect(vehicle);

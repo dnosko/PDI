@@ -1,59 +1,21 @@
 package vehicles;
 
-import org.apache.flink.api.common.ExecutionConfig;
-import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
-import org.apache.flink.api.common.typeinfo.TypeHint;
+
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeinfo.Types;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.api.common.typeutils.base.VoidSerializer;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
-
-import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
-import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
-import org.apache.flink.streaming.api.TimeCharacteristic;
-import org.apache.flink.streaming.api.datastream.AllWindowedStream;
-import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
-import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
-import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFunction;
 import org.apache.flink.streaming.api.operators.*;
-
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.api.windowing.triggers.ProcessingTimeTrigger;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.runtime.operators.windowing.WindowOperator;
-import org.apache.flink.streaming.runtime.operators.windowing.WindowOperatorTest;
-import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalIterableProcessAllWindowFunction;
-import org.apache.flink.streaming.runtime.operators.windowing.functions.InternalIterableProcessWindowFunction;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-
-import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
-import org.apache.flink.streaming.util.ProcessFunctionTestHarnesses;
 import org.apache.flink.streaming.util.TestHarnessUtil;
-import org.apache.flink.test.util.AbstractTestBase;
-import org.apache.flink.test.util.MiniClusterWithClientResource;
-import org.apache.flink.util.Collector;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.jupiter.api.Test;
-
-import java.io.Serializable;
 import java.util.*;
-
-import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
-
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
-import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -62,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
 
@@ -123,7 +84,7 @@ public class VehiclesTest {
             OneInputStreamOperator<IN, OUT> operator,
             KeySelector<IN, K> keySelector,
             TypeInformation<K> keyType,
-            List<IN> elementsWindow1, List<IN> elementsWindow2, Long firstWindowEndTime)
+            List<IN> elementsWindow1, List<IN> elementsWindow2)
             throws Exception {
 
         KeyedOneInputStreamOperatorTestHarness<K, IN, OUT> testHarness =
@@ -262,7 +223,7 @@ public class VehiclesTest {
 
 
         List<Vehicle> input = Arrays.asList(A, B, C, D);
-        List<Vehicle> input2 = List.of(A2,C2,E);
+        List<Vehicle> input2 = Arrays.asList(A2,C2,E);
 
         ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
         // first window
@@ -281,8 +242,7 @@ public class VehiclesTest {
         DataStream<Vehicle> inputStream = env.fromElements(A,B,C,D,A2,E,C2);
         DataStream<Vehicle> window1 = stream.trainLastStop(inputStream);
         // body taken from https://github.com/apache/flink/blob/master/flink-streaming-java/src/test/java/org/apache/flink/streaming/runtime/operators/windowing/AllWindowTranslationTest.java#L1307
-        // applies also for the code below
-        //TODO mozno upravit do funkcie ...
+        // applies also for the code in other test functions
         OneInputTransformation<Vehicle, Vehicle> transform =
                 (OneInputTransformation<Vehicle, Vehicle>)
                         window1.getTransformation();
@@ -323,7 +283,7 @@ public class VehiclesTest {
         Vehicle F = new Vehicle("6", (short) 5, 90, 6, "L6", 5, 80, timeWindow2);
 
         List<Vehicle> input = Arrays.asList(A, B, C, D, G);
-        List<Vehicle> input2 = List.of(A2,E,F);
+        List<Vehicle> input2 = Arrays.asList(A2,E,F);
 
         ConcurrentLinkedQueue<Object> expected = new ConcurrentLinkedQueue<>();
         // first window
@@ -397,14 +357,17 @@ public class VehiclesTest {
         expected.add(new StreamRecord<>(A,59999));
         expected.add(new StreamRecord<>(B,59999));
         expected.add(new StreamRecord<>(C,59999));
-        expected.add(new StreamRecord<>(E,59999));
         expected.add(new StreamRecord<>(D,59999));
+        expected.add(new StreamRecord<>(E,59999));
         // second window 59999
         expected.add(new StreamRecord<>(I,119999));
-        expected.add(new StreamRecord<>(F2,119999));
         expected.add(new StreamRecord<>(J,119999));
+        expected.add(new StreamRecord<>(F2,119999));
         expected.add(new StreamRecord<>(K,119999));
         expected.add(new StreamRecord<>(B2,119999));
+
+        for (Object e: expected)
+            System.out.println("expected:" + e.toString());
 
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -439,7 +402,6 @@ public class VehiclesTest {
     public void testGlobalAverageDelay() throws Exception {
         long timeWindow1 = 10000L;
         long timeWindow2 = 60000L;
-        long firstWindowEndTime = 60050L;
         int minute = 1;
         // result 100 + 60 + 10 + 50 + 1 + 8 / 6 = 38.1666666667
         Vehicle A = new Vehicle("1", (short) 5, 340, 1, "L1", 100, 10, timeWindow1);
@@ -490,7 +452,7 @@ public class VehiclesTest {
                 winOperator,
                 winOperator.getKeySelector(),
                 TypeInformation.of(Vehicle.class),
-                input, input2 ,firstWindowEndTime);
+                input, input2);
 
         TestHarnessUtil.assertOutputEqualsSorted("Output not equal to expected", expected, results,
                 Comparator.comparing(streamRecord -> ((StreamRecord<Double>) streamRecord).getValue())

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+/* Keeps track of top N most delayed vehicles of all time. */
 public class MostDelayedGlobally extends ProcessAllWindowFunction<Vehicle, Vehicle, TimeWindow> {
     private transient ListState<Vehicle> mostDelayedVehicles;
     private final int topN = 5;
@@ -29,14 +30,13 @@ public class MostDelayedGlobally extends ProcessAllWindowFunction<Vehicle, Vehic
         Iterable<Vehicle> current = mostDelayedVehicles.get();
 
         List<Vehicle> currentList = new ArrayList<>();
-
+        // copy the old list to a new one
         for (Vehicle v : current) {
             currentList.add(v);
         }
 
-        System.out.println("Size:" +currentList.size());
 
-        // Update state with the new vehicles
+        // Add new vehicles
         for (Vehicle vehicle : elements) {
             // test if vehicle with same id is already in list
             Vehicle testIfAlreadyInList = vehicleAlreadyInList(mostDelayedVehicles.get(), vehicle);
@@ -46,15 +46,15 @@ public class MostDelayedGlobally extends ProcessAllWindowFunction<Vehicle, Vehic
             }
             // add new vehicle to list
             currentList.add(vehicle);
-
         }
 
+        // sort by descending order by delay
         currentList.sort(Comparator.comparing(Vehicle::getDelay).reversed());
 
         mostDelayedVehicles.clear();
         // keep only topN delayed vehicles
         mostDelayedVehicles.addAll(currentList.subList(0, Math.min(topN, currentList.size())));
-        System.out.println("All time");
+
         // Emit the most delayed vehicles
         for (Vehicle vehicle : mostDelayedVehicles.get()) {
             out.collect(vehicle);

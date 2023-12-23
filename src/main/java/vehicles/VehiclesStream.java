@@ -1,7 +1,6 @@
 package vehicles;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import lombok.Data;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.*;
@@ -25,35 +24,26 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 
-
-/**
- * TODO:
- * pridat prepinace
- * urobit testy
- * **/
 @Slf4j
 public class VehiclesStream {
     public static final int CHECKPOINTING_INTERVAL_MS = 5000;
     private static final String JOB_NAME = "Streaming Argis data";
     public static void main(String[] args) throws Exception {
+        // set up environment
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
         env.setRuntimeMode(RuntimeExecutionMode.STREAMING);
-        // toto je pre lokalne spustenie a debugovanie.
-        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
-        // todo pridat if ci test ak test tak to ide zo suboru alebo z iteratoru from Collection
-        //  inak z websocketu?2
-
         ParameterTool parameters = ParameterTool.fromArgs(args);
 
         env.getConfig().setGlobalJobParameters(parameters);
-
-        DataStreamSource<String> mySocketStream = env.addSource(new WebSocketStream());
-        DataStream<JsonNode> jsonStream = mySocketStream.map(jsonString -> mapToJson(jsonString));
-        DataStream<Vehicle> vehicleStream = jsonStream.map(s -> mapToVehicle(s)).filter(new IsActiveFilter());
         env.enableCheckpointing(CHECKPOINTING_INTERVAL_MS);
         env.setRestartStrategy(RestartStrategies.noRestart());
 
+        // set data source and map to class Vehicle from Json
+        DataStreamSource<String> mySocketStream = env.addSource(new WebSocketStream());
+        DataStream<JsonNode> jsonStream = mySocketStream.map(jsonString -> mapToJson(jsonString));
+        DataStream<Vehicle> vehicleStream = jsonStream.map(s -> mapToVehicle(s)).filter(new IsActiveFilter());
+
+        // set stream
         DataStream<String> outputStream = vehicleStream.map(Vehicle::toString);
 
 
@@ -123,78 +113,6 @@ public class VehiclesStream {
             outputStream.print();
         }
 
-
-
-        /* Vehicles going North */
-        //TODO potom urobit na to nejaku mozno factory? alebo nieco nech to je pekne podla prepinacov...
-        // TODO upravit JSON format na nejaky krajsi po riadkoch?
-       /*DataStream<Vehicle> northStream = vehiclesGoingNorth(vehicleStream);
-        //northStream.print();
-        final Path outputNorth = new Path("tmp/north");
-        final DefaultRollingPolicy<Vehicle, String> rollingPolicy = DefaultRollingPolicy
-                .builder()
-                .withMaxPartSize(MemorySize.ofMebiBytes(1))
-                .withRolloverInterval(Duration.ofSeconds(10))
-                .build();
-        final FileSink<Vehicle> northSink = FileSink
-                .<Vehicle>forRowFormat(outputNorth, new SimpleStringEncoder<>())
-                .withRollingPolicy(rollingPolicy)
-                .build();
-
-        northStream.sinkTo(northSink).name("north-sink");
-        */
-        /* Trains with last stops
-        * Nie som si ista ci to funguje uplne spravne hh ten flatmap ci nema byt tiez cez nejake globalne okno napr. */
-
-       /*SingleOutputStreamOperator<String> printTrainLastStop =  trainLastStop(vehicleStream).map(new MapFunction<Vehicle, String>() {
-            @Override
-            public String map(Vehicle v) throws Exception {
-                return "trainID:"+ v.id + " trainName:" + v.linename + " last stop:" +v.laststopid + " last update:"+ v.lastupdate;
-            }
-        });//.print();*/
-
-
-        /*final Path outputAllTrainsLastStop = new Path("tmp/lastStop");
-        final DefaultRollingPolicy<String, String> rollingPolicyLastStop = DefaultRollingPolicy
-                .builder()
-                .withMaxPartSize(MemorySize.ofMebiBytes(1))
-                .withRolloverInterval(Duration.ofSeconds(60))
-                .build();
-        final FileSink<String> lastStopSink = FileSink
-                .<String>forRowFormat(outputAllTrainsLastStop, new SimpleStringEncoder<>())
-                .withRollingPolicy(rollingPolicyLastStop)
-                .build();
-
-        printTrainLastStop.sinkTo(lastStopSink).name("laststop-sink");*/
-        /**************************************************************************************/
-        //env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
-
-
-        /* top delayed vehicles since start of application, sorting doesnt work...*/
-        /*mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
-            @Override
-            public String map(Vehicle v) throws Exception {
-                return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
-            }
-        }).print().setParallelism(1);
-
-
-        /* top 5 delayed vehicles in 3 minutes window, sorting doesnt work..*/
-        /*int windowMinutes = 1;
-        mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
-                            @Override
-                            public String map(Vehicle v) throws Exception {
-                                return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
-                            }
-        }).print().setParallelism(1);*/
-
-        /* Average for 3 minutes across all vehicles idk ci ok s tym stringom*/
-        int delayWindowInMinutes = 1;
-        //agverageDelay(vehicleStream, delayWindowInMinutes).map(v -> "Average delay:" + v.toString()).print();
-
-        /* Average time between input data with 10 latest records for each vehicle */
-       //averageTimeBetweenRecords(vehicleStream, 10).print();
-
         env.execute(JOB_NAME);
 
     }
@@ -228,9 +146,7 @@ public class VehiclesStream {
                 .aggregate(new AverageAggregate());
     }
 
-    /* Most delayed vehicles in time window specified by minutes
-     * TODO sorting works in tests takze skor vyriesit iba paralelizmus
-     * */
+    /* Most delayed vehicles in time window specified by minutes */
     public static SingleOutputStreamOperator<Vehicle> mostDelayedVehiclesInWindow(DataStream<Vehicle> vehicleStream, int minutes){
        return vehicleStream
                 .filter(v -> v.delay > 0.0)
@@ -240,9 +156,7 @@ public class VehiclesStream {
                ;
     }
 
-    /* Outputs stream of most delayed vehicles since start of application, outputing resulsts every 10 seconds. .
-    * TODO sorting doesnt work yet - asi nastavit iba paraleizmus? env.setParallelism(1)
-    * */
+    /* Outputs stream of most delayed vehicles since start of application */
     public static SingleOutputStreamOperator<Vehicle> mostDelayedVehicles(DataStream<Vehicle> vehicleStream){
         return vehicleStream.filter(v -> v.delay > 0.0)
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<Vehicle>forMonotonousTimestamps().withTimestampAssigner((event, timestamp) -> event.getLastUpdateLong()))
@@ -304,8 +218,6 @@ public class VehiclesStream {
             return (v.bearing >= lowerBound && v.bearing <= upperBound) || v.bearing >= upperBound2;
         }
         }
-
-
 
 }
 
