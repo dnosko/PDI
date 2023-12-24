@@ -64,7 +64,7 @@ public class VehiclesStream {
         }
         else if (parameters.has("3") || (parameters.has("delayed"))) {
             env.setParallelism(1);
-            outputStream = mostDelayedVehicles(vehicleStream).map(new MapFunction<Vehicle, String>() {
+            outputStream = mostDelayedVehicles(vehicleStream).setParallelism(1).map(new MapFunction<Vehicle, String>() {
                 @Override
                 public String map(Vehicle v) throws Exception {
                     return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;
@@ -74,7 +74,7 @@ public class VehiclesStream {
         else if (parameters.has("4") || (parameters.has("delayedw"))) {
             int windowMinutes = 3;
             env.setParallelism(1);
-            outputStream = mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).map(new MapFunction<Vehicle, String>() {
+            outputStream = mostDelayedVehiclesInWindow(vehicleStream, windowMinutes).setParallelism(1).map(new MapFunction<Vehicle, String>() {
                 @Override
                 public String map(Vehicle v) throws Exception {
                     return "ID:"+ v.id + " name:" + v.linename + " delay:" +v.delay + " last update:"+ v.lastupdate;

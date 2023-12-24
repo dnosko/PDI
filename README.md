@@ -23,7 +23,8 @@ when no option or one that isn't specified here is used, the application prints 
 
 ### Local run:
 
-`./gradlew run [args="OPTIONS"]` \
+`./gradlew build` \
+`./gradlew run [--args="OPTIONS"]` \
 Args can be OPTIONS mentioned above and/or `--output <out>`
 
 ### Run on cluster:
