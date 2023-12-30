@@ -8,7 +8,7 @@ plugins {
     // Apply the Maven publish plugin to publish resulting artefacts into a Maven repository
     id 'maven-publish'
     // Apply the shadow plugin to produce fat JARs
-    id 'com.github.johnrengelman.shadow' version '7.1.1'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 group = 'vehicles'
@@ -41,17 +41,19 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.22'
 
     // Compile-time dependencies that should NOT be part of the shadow (uber) jar and are provided in the lib folder of Flink
-    implementation "org.apache.flink:flink-json:1.18.0"
-    implementation "org.apache.flink:flink-clients:1.18.0"
+    implementation 'org.apache.flink:flink-clients:1.18.0'
     implementation "org.apache.flink:flink-streaming-java:1.18.0"
     implementation "org.apache.flink:flink-connector-files:1.18.0"
-    implementation "org.apache.flink:flink-test-utils:1.18.0"
+     testImplementation "org.apache.flink:flink-test-utils:1.18.0"
+    //implementation "org.apache.flink:flink-json:1.18.0"
+    //implementation 'org.apache.flink:flink-java:1.18.0'
     // Dependencies that should be part of the shadow jar, e.g. connectors. These must be in the flinkShadowJar configuration!
     runtimeOnly "org.apache.logging.log4j:log4j-slf4j-impl:2.21.1"
     runtimeOnly "org.apache.logging.log4j:log4j-api:2.21.1"
     runtimeOnly "org.apache.logging.log4j:log4j-core:2.21.1"
     // Add test dependencies here.
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testImplementation 'org.apache.flink:flink-runtime:1.18.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
 }
 

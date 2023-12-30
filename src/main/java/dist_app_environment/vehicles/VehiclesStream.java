@@ -42,7 +42,7 @@ public class VehiclesStream {
         DataStreamSource<String> mySocketStream = env.addSource(new WebSocketStream());
         DataStream<JsonNode> jsonStream = mySocketStream.map(jsonString -> mapToJson(jsonString));
         DataStream<Vehicle> vehicleStream = jsonStream.map(s -> mapToVehicle(s)).filter(new IsActiveFilter());
-        vehicleStream.print();
+        //vehicleStream.print();
         // set stream
         DataStream<String> outputStream = vehicleStream.map(Vehicle::toString);
 
@@ -95,6 +95,7 @@ public class VehiclesStream {
                 }
             });
         }
+     
 
         if (parameters.has("output")) {
             final Path output = new Path(parameters.getRequired("output"));
