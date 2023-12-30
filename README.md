@@ -27,6 +27,10 @@ when no option or one that isn't specified here is used, the application prints 
 `./gradlew run [--args="OPTIONS"]` \
 Args can be OPTIONS mentioned above and/or `--output <out>`
 
+or \
+`./gradlew fatJar` \
+`java -jar ./build/libs/vehicles-0.1-SNAPSHOT-fat.jar [OPTIONS]` 
+
 ### Run on cluster:
 
 `./gradlew build`
